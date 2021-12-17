@@ -608,6 +608,7 @@ public class RealmServer: NSObject {
 
         if logLevel != .none {
             serverProcess.standardOutput = pipe
+            serverProcess.standardError = pipe
         } else {
             serverProcess.standardOutput = nil
         }

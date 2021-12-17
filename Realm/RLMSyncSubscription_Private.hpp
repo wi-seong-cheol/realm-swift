@@ -18,6 +18,8 @@
 
 #import "RLMSyncSubscription_Private.h"
 
+@class RLMRealm;
+
 namespace realm::sync {
 class Subscription;
 class SubscriptionSet;
