@@ -1,1 +1,1 @@
-Realm/RLMSyncSubscription_Private.h
+../../Realm/RLMSyncSubscription_Private.h

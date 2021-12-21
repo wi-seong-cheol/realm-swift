@@ -446,8 +446,8 @@ public class RealmServer: NSObject {
     private var session: Admin.AdminSession?
 
     /// AWS access key and Id, for local testing
-    private static let awsAccessKeyId = "AKIAVG4A4ZBJIGJ6B5TO"
-    private static let awsSecretAccessKey = "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"
+    private static let awsAccessKeyId = getenv("AWS_ACCESS_KEY_ID")
+    private static let awsSecretAccessKey = getenv("AWS_SECRET_ACCESS_KEY")
 
     /// Check if the BaaS files are present and we can run the server
     @objc public class func haveServer() -> Bool {
@@ -607,8 +607,8 @@ public class RealmServer: NSObject {
         }
 
         if logLevel != .none {
-            serverProcess.standardOutput = pipe
-            serverProcess.standardError = pipe
+//            serverProcess.standardOutput = pipe
+//            serverProcess.standardError = pipe
         } else {
             serverProcess.standardOutput = nil
         }
@@ -724,13 +724,13 @@ public class RealmServer: NSObject {
                 ]
             ])
         case .flx:
-            let queryableFields = schema.objectSchema.compactMap { object  -> [String]? in
-                guard object.className == "Person" || object.className == "Dog" else { return nil }
-                return object.properties.compactMap { property -> String? in
-                    guard !property.isSet && !property.isMap && !property.isArray && property.type != .object else { return nil }
-                    return property.name
+            let queryableFields = schema.objectSchema.reduce(into: [String]()) { queryableFields, object in
+                guard object.primaryKeyProperty?.name == "_id" else { return }
+                object.properties.forEach { property in
+                    queryableFields.append(property.name)
                 }
-            }.flatMap { $0 }
+            }
+
             serviceResponse = app.services.post([
                 "name": "mongodb1",
                 "type": "mongodb",
@@ -738,12 +738,14 @@ public class RealmServer: NSObject {
                     "uri": "mongodb://localhost:26000",
                     "sync_query": [
                         "state": "enabled",
-                        "database_name": "test_data_2",
+                        "database_name": "test_data",
                         "queryable_fields_names": queryableFields
                     ]
                 ]
             ])
+            print(queryableFields)
         }
+
 
         guard let serviceId = (try serviceResponse.get() as? [String: Any])?["_id"] as? String else {
             throw URLError(.badServerResponse)
@@ -760,7 +762,6 @@ public class RealmServer: NSObject {
 
         var ruleCreations = [Result<Any?, Error>]()
         for objectSchema in syncTypes {
-//            guard objectSchema.className == "Person" || objectSchema.className == "Dog" else { break }
             ruleCreations.append(rules.post(objectSchema.stitchRule(bsonType, schema)))
         }
 
@@ -773,7 +774,6 @@ public class RealmServer: NSObject {
             ruleIds[dict["collection"]!] = dict["_id"]!
         }
         for objectSchema in syncTypes {
-//            guard objectSchema.className == "Person" || objectSchema.className == "Dog" else { break }
             let id = ruleIds[objectSchema.className]!
             rules[id].put(on: group, data: objectSchema.stitchRule(bsonType, schema, id: id), failOnError)
         }
@@ -827,6 +827,19 @@ public class RealmServer: NSObject {
         ]
 
         _ = rules.post(userDataRule)
+        switch (rules.get()) {
+        case .success(let val):
+            let val = val as! [[String: String]]
+            let f = val.map { v -> Any in
+                guard case let .success(r) = rules[v["_id"]!].get() else {
+                    fatalError()
+                }
+                return r!
+            }
+//            print(f)
+        case .failure(_):
+            fatalError()
+        }
         app.customUserData.patch(on: group, [
             "mongo_service_id": serviceId,
             "enabled": true,

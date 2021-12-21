@@ -263,7 +263,7 @@ static NSURL *syncDirectoryForChildProcess() {
         user = u;
         [expectation fulfill];
     }];
-    [self waitForExpectations:@[expectation] timeout:4.0];
+    [self waitForExpectations:@[expectation] timeout:10.0];
     XCTAssertTrue(user.state == RLMUserStateLoggedIn, @"User should have been valid, but wasn't");
     return user;
 }

@@ -20,7 +20,7 @@ DEPENDENCIES = File.open("#{BASE_DIR}/dependencies.list").map { |line|
 MONGODB_VERSION='5.0.3'
 GO_VERSION='1.15.2'
 NODE_VERSION='13.14.0'
-STITCH_VERSION=DEPENDENCIES["STITCH_VERSION"]
+STITCH_VERSION="refs/heads/mark_no_query"#DEPENDENCIES["STITCH_VERSION"]
 
 MONGODB_URL="https://fastdl.mongodb.org/osx/mongodb-macos-x86_64-#{MONGODB_VERSION}.tgz"
 TRANSPILER_TARGET='node13-macos'
@@ -82,7 +82,7 @@ def setup_stitch
     stitch_dir = "#{BUILD_DIR}/stitch"
     if !Dir.exist?(stitch_dir)
         puts 'cloning stitch'
-        puts `git clone git@github.com:10gen/baas #{stitch_dir}`
+        puts `git clone git@github.com:mpobrien/stitch #{stitch_dir}`
     else
         puts 'stitch dir exists'
     end
@@ -91,12 +91,15 @@ def setup_stitch
     stitch_worktree = "#{go_root}/src/github.com/10gen/stitch"
     if Dir.exist?("#{stitch_dir}/.git")
         # Fetch the BaaS version if we don't have it
+        puts 'verifying ref'
         puts `git -C '#{stitch_dir}' show-ref --verify --quiet #{STITCH_VERSION} || git -C '#{stitch_dir}' fetch`
         # Set the worktree to the correct version
         if Dir.exist?(stitch_worktree)
+            puts 'checking out to worktree'
             puts `git -C '#{stitch_worktree}' checkout #{STITCH_VERSION}`
         else
-            puts `git -C '#{stitch_dir}' worktree add '#{stitch_worktree}' #{STITCH_VERSION}`
+            puts 'adding to worktree'
+            puts `git -C '#{stitch_dir}' worktree add '#{stitch_worktree}' mark_no_query`
         end
     else
         # We have a stitch directory with no .git directory, meaning we're

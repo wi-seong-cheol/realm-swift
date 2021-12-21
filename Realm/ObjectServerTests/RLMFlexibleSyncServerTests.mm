@@ -19,6 +19,7 @@
 #import "RLMSyncTestCase.h"
 #import "RLMSyncSubscription_Private.h"
 #import "RLMApp_Private.hpp"
+#import "RLMSchema_Private.hpp"
 
 // These are defined in Swift. Importing the auto-generated header doesn't work
 // when building with SPM, so just redeclare the bits we need.
@@ -684,6 +685,7 @@
 
 @interface RLMFlexibleSyncServerTests: RLMFlexibleSyncTestCase
 @end
+#import <objc/runtime.h>
 
 @implementation RLMFlexibleSyncServerTests
 - (void)testFlexibleSyncOpenRealm {
@@ -693,6 +695,7 @@
                       rootDirectory:[self clientDataRoot]];
     RLMSyncManager *syncManager = app.syncManager;
     syncManager.logLevel = RLMSyncLogLevelTrace;
+    NSLog(@"!!LOGGING IN");
     RLMUser *user =  [self logInUserForCredentials:[self basicCredentialsWithName:NSStringFromSelector(_cmd)
                                                                          register:YES
                                                                               app:app]
@@ -702,11 +705,23 @@
     };
 
     RLMRealmConfiguration *config = [user flexibleSyncConfiguration];
-//    config.objectClasses = @[Dog.self,
-//                             Person.self];
+    RLMSchema *schema = [RLMSchema sharedSchema];
+    NSMutableArray *objectClasses = [NSMutableArray new];
+    NSString* moduleName = [NSBundle bundleForClass:[self class]].infoDictionary[@"CFBundleName"];
+    for (RLMObjectSchema* s in [schema objectSchema]) {
+        if ([[s.primaryKeyProperty name]isEqual: @"_id"]) {
+            if (objc_getClass([[s className] cStringUsingEncoding:NSUTF8StringEncoding])) {
+                [objectClasses addObject: objc_getClass([[s className] cStringUsingEncoding:NSUTF8StringEncoding])];
+            }
+        }
+    }
+    
+    config.objectClasses = objectClasses;
 
     XCTestExpectation *ex1 = [self expectationWithDescription:@"async open"];
     __block RLMRealm *realm;
+
+    NSLog(@"!!BEGINNING ASYNC OPEN");
     [RLMRealm asyncOpenWithConfiguration:config
                            callbackQueue:dispatch_get_main_queue()
                                 callback:^(RLMRealm *asyncRealm, NSError *error) {
@@ -715,7 +730,7 @@
         realm = asyncRealm;
         [ex1 fulfill];
     }];
-    [self waitForExpectationsWithTimeout:300.0 handler:nil];
+    [self waitForExpectationsWithTimeout:300 handler:nil];
     XCTAssertNotNil(realm);
 
     RLMSyncSubscriptionSet *subs = realm.subscriptions;
