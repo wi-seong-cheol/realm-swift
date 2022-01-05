@@ -100,6 +100,10 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
     _config->stop_policy = translateStopPolicy(stopPolicy);
 }
 
+- (RLMClientResetMode)clientResetMode {
+    return translateClientResetMode(_config->client_resync_mode);
+}
+
 - (id<RLMBSON>)partitionValue {
     if (!_config->partition_value.empty()) {
         return RLMConvertBsonToRLMBSON(realm::bson::parse(_config->partition_value.c_str()));
@@ -120,23 +124,27 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
     return [self initWithUser:user
                partitionValue:partitionValue
                 customFileURL:nil
-                   stopPolicy:RLMSyncStopPolicyAfterChangesUploaded];
+                   stopPolicy:RLMSyncStopPolicyAfterChangesUploaded
+              clientResetMode:RLMClientResetModeManual];
 }
 
 - (instancetype)initWithUser:(RLMUser *)user
               partitionValue:(nullable id<RLMBSON>)partitionValue
-                  stopPolicy:(RLMSyncStopPolicy)stopPolicy{
+                  stopPolicy:(RLMSyncStopPolicy)stopPolicy
+             clientResetMode:(RLMClientResetMode)clientResetMode {
     auto config = [self initWithUser:user
                       partitionValue:partitionValue
                        customFileURL:nil
-                          stopPolicy:stopPolicy];
+                          stopPolicy:stopPolicy
+                     clientResetMode:RLMClientResetModeManual];
     return config;
 }
 
 - (instancetype)initWithUser:(RLMUser *)user
               partitionValue:(id<RLMBSON>)partitionValue
                customFileURL:(nullable NSURL *)customFileURL
-                  stopPolicy:(RLMSyncStopPolicy)stopPolicy {
+                  stopPolicy:(RLMSyncStopPolicy)stopPolicy
+             clientResetMode:(RLMClientResetMode)clientResetMode {
     if (self = [super init]) {
         std::stringstream s;
         s << RLMConvertRLMBSONToBson(partitionValue);
@@ -199,7 +207,16 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
                 errorHandler(nsError, session);
             });
         };
-        _config->client_resync_mode = realm::ClientResyncMode::Manual;
+        switch (clientResetMode) {
+            case RLMClientResetModeManual:
+                _config->client_resync_mode = realm::ClientResyncMode::Manual;
+                break;
+            case RLMClientResetModeDiscardLocal:
+                _config->client_resync_mode = realm::ClientResyncMode::SeamlessLoss;
+                break;
+            default:
+                _config->client_resync_mode = realm::ClientResyncMode::Manual;
+        }
 
         if (NSString *authorizationHeaderName = manager.authorizationHeaderName) {
             _config->authorization_header_name.emplace(authorizationHeaderName.UTF8String);

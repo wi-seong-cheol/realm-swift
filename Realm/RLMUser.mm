@@ -81,10 +81,16 @@ using namespace realm;
 }
 
 - (RLMRealmConfiguration *)configurationWithPartitionValue:(nullable id<RLMBSON>)partitionValue {
+    return [self configurationWithPartitionValue:partitionValue clientResetMode:RLMClientResetModeManual];
+}
+
+- (RLMRealmConfiguration *)configurationWithPartitionValue:(nullable id<RLMBSON>)partitionValue
+                                           clientResetMode:(RLMClientResetMode)clientResetMode {
     auto syncConfig = [[RLMSyncConfiguration alloc] initWithUser:self
-                                                  partitionValue:partitionValue
-                                                   customFileURL:nil
-                                                      stopPolicy:RLMSyncStopPolicyAfterChangesUploaded];
+                                            partitionValue:partitionValue
+                                             customFileURL:nil
+                                                stopPolicy:RLMSyncStopPolicyImmediately
+                                           clientResetMode:clientResetMode];
     RLMRealmConfiguration *config = [[RLMRealmConfiguration alloc] init];
     config.syncConfiguration = syncConfig;
     return config;

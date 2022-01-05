@@ -440,6 +440,16 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         }
     }
 
+    // ???: I used this while writing. Can probably delete it.
+    func testClientResetModeInit() {
+        do {
+            let user = try logInUser(for: basicCredentials())
+            let configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
+            XCTAssertEqual(configuration.syncConfiguration!.clientResetMode, ClientResetMode.discardLocal)
+        } catch {
+            XCTFail("Failed with: \(error.localizedDescription)")
+        }
+    }
 
     // MARK: - Progress notifiers
     func testStreamingDownloadNotifier() {

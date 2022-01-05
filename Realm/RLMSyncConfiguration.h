@@ -25,6 +25,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+// ???: Docs?
+typedef NS_ENUM(NSUInteger, RLMClientResetMode) {
+  RLMClientResetModeManual,
+  RLMClientResetModeDiscardLocal
+};
+
 /**
  A configuration object representing configuration state for a Realm which is intended to sync with a Realm Object
  Server.
@@ -40,6 +46,10 @@ NS_ASSUME_NONNULL_BEGIN
  Realm.
  */
 @property (nonatomic, readonly) id<RLMBSON> partitionValue;
+
+// ???: Should the declaration be readonly?
+// TODO: Docs, reorder
+@property (nonatomic) RLMClientResetMode clientResetMode;
 
 /**
  Whether nonfatal connection errors should cancel async opens.

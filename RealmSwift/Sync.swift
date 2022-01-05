@@ -207,6 +207,8 @@ public typealias Provider = RLMIdentityProvider
     case pinCertificate(path: URL)
 }
 
+public typealias ClientResetMode = RLMClientResetMode
+
 /**
  A `SyncConfiguration` represents configuration parameters for Realms intended to sync with
  MongoDB Realm.
@@ -228,6 +230,9 @@ public typealias Provider = RLMIdentityProvider
      */
     internal let stopPolicy: RLMSyncStopPolicy
 
+    // TODO: docs
+    public let clientResetMode: ClientResetMode
+
     /**
      By default, Realm.asyncOpen() swallows non-fatal connection errors such as
      a connection attempt timing out and simply retries until it succeeds. If
@@ -241,12 +246,14 @@ public typealias Provider = RLMIdentityProvider
         self.stopPolicy = config.stopPolicy
         self.partitionValue = ObjectiveCSupport.convert(object: config.partitionValue)
         self.cancelAsyncOpenOnNonFatalErrors = config.cancelAsyncOpenOnNonFatalErrors
+        self.clientResetMode = config.clientResetMode
     }
 
     func asConfig() -> RLMSyncConfiguration {
         let c = RLMSyncConfiguration(user: user,
                                      partitionValue: partitionValue.map(ObjectiveCSupport.convertBson),
-                                     stopPolicy: stopPolicy)
+                                     stopPolicy: stopPolicy,
+                                     clientResetMode: clientResetMode)
         c.cancelAsyncOpenOnNonFatalErrors = cancelAsyncOpenOnNonFatalErrors
         return c
     }
@@ -378,6 +385,15 @@ public extension User {
         return ObjectiveCSupport.convert(object: config)
     }
 
+    // !!!: I originally tried using a default value for clientResetMode because this has to be a non-breaking change.
+    // but the method signature would be ambiguous with
+    // func configuration<T: BSON>(partitionValue: T, cancelAsyncOpenOnNonFatalErrors: Bool = false) // Sync.swift : ~416
+    // TODO: Docs
+    func configuration<T: BSON>(partitionValue: T, clientResetMode: ClientResetMode) -> Realm.Configuration {
+//        let c = self.__configuration
+        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)), clientResetMode: clientResetMode)
+        return ObjectiveCSupport.convert(object: config)
+    }
     /**
      Create a sync configuration instance.
 

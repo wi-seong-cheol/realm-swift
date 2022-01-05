@@ -33,6 +33,9 @@ enum class AccessLevel;
 realm::SyncSessionStopPolicy translateStopPolicy(RLMSyncStopPolicy stopPolicy);
 RLMSyncStopPolicy translateStopPolicy(realm::SyncSessionStopPolicy stop_policy);
 
+typedef NS_ENUM(NSUInteger, RLMClientResetMode);
+RLMClientResetMode translateClientResetMode(realm::ClientResyncMode mode);
+
 std::shared_ptr<realm::SyncSession> sync_session_for_realm(RLMRealm *realm);
 
 #pragma mark - Get user context
