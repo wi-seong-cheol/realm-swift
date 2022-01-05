@@ -232,6 +232,17 @@ public typealias ClientResetMode = RLMClientResetMode
 
     // TODO: docs
     public let clientResetMode: ClientResetMode
+    // ???: Shorten names?
+    public func notifyBeforeClientReset(completion: (_ local: Realm, _ remote: Realm) -> ()) {
+        self.asConfig().notify { local, remote in
+            print("before")
+        }
+    }
+    public func notifyAfterClientReset(completion: (_ local: Realm) -> ()) {
+        self.asConfig().notify { local in
+            print("after")
+        }
+    }
 
     /**
      By default, Realm.asyncOpen() swallows non-fatal connection errors such as

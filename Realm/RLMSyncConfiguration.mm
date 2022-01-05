@@ -115,6 +115,13 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
     return _config->cancel_waits_on_nonfatal_error;
 }
 
+- (void)notifyBeforeClientReset:(void(^)(RLMRealm *local, RLMRealm *remote))callback {
+
+}
+- (void)notifyAfterClientReset:(void(^)(RLMRealm *local))callback {
+
+}
+
 - (void)setCancelAsyncOpenOnNonFatalErrors:(bool)cancelAsyncOpenOnNonFatalErrors {
     _config->cancel_waits_on_nonfatal_error = cancelAsyncOpenOnNonFatalErrors;
 }

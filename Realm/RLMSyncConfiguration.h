@@ -18,6 +18,7 @@
 
 #import <Foundation/Foundation.h>
 
+@class RLMRealm;
 @class RLMRealmConfiguration;
 @class RLMUser;
 @class RLMApp;
@@ -50,6 +51,8 @@ typedef NS_ENUM(NSUInteger, RLMClientResetMode) {
 // ???: Should the declaration be readonly?
 // TODO: Docs, reorder
 @property (nonatomic) RLMClientResetMode clientResetMode;
+- (void)notifyBeforeClientReset:(void(^)(RLMRealm *local, RLMRealm *remote))callback;
+- (void)notifyAfterClientReset:(void(^)(RLMRealm *local))callback;
 
 /**
  Whether nonfatal connection errors should cancel async opens.

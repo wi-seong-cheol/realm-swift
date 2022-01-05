@@ -440,6 +440,119 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         }
     }
 
+    func testClientResetDiscardLocal() {
+        let credentials = basicCredentials()
+
+        let objectTypes = [SwiftPerson.self,
+                           SwiftHugeSyncObject.self,
+                           SwiftCollectionSyncObject.self,
+                           SwiftUUIDPrimaryKeyObject.self,
+                           SwiftStringPrimaryKeyObject.self,
+                           SwiftIntPrimaryKeyObject.self,
+                           SwiftTypesSyncObject.self]
+
+        if (!isParent) {
+            do {
+                let user = try logInUser(for: credentials)
+                var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
+                configuration.objectTypes = objectTypes
+                configuration.syncConfiguration!.notifyBeforeClientReset { realm1, realm2 in
+                    print("hi")
+                }
+                let realm = try Realm(configuration: configuration)
+                try realm.write {
+                    for _ in 0..<SwiftSyncTestCase.bigObjectCount {
+                        realm.add(SwiftHugeSyncObject.create())
+                    }
+                }
+                waitForUploads(for: realm)
+
+                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, SwiftSyncTestCase.bigObjectCount)
+                XCTAssertEqual(realm.configuration.syncConfiguration?.clientResetMode, ClientResetMode.discardLocal)
+                return
+            } catch {
+                XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
+            }
+        }
+        executeChild()
+
+        // ****** Cause a client reset by restarting the sync service.
+        // ****** This causes server sync history to be resynthesized.
+        do {
+            let appServerId = try RealmServer.shared.retrieveAppServerId(appId)
+            let syncServiceId = try RealmServer.shared.retrieveSyncServiceId(appServerId: appServerId)
+            guard let syncServiceConfig = try RealmServer.shared.getSyncServiceConfiguration(appServerId: appServerId, syncServiceId: syncServiceId) else { fatalError("precondition failure: no sync service configuration found") }
+
+            // *******
+            // Disable Sync
+            // *******
+            XCTAssertTrue(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+            let exp1 = expectation(description: "disable sync")
+            RealmServer.shared.disableSync(appServerId: appServerId, syncServiceId: syncServiceId) { results in
+                switch results {
+                case .success(let x):
+                    print("success \(String(describing: x))")
+                    exp1.fulfill()
+                case .failure(let error):
+                    print("error--: \(error.localizedDescription)")
+                    XCTFail()
+                }
+            }
+            waitForExpectations(timeout: 2, handler: nil)
+            XCTAssertFalse(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+            // *******
+            // Enable Sync
+            // *******
+            let exp2 = expectation(description: "enable sync")
+            RealmServer.shared.enableSync(appServerId: appServerId, syncServiceId: syncServiceId, syncServiceConfiguration: syncServiceConfig) { results in
+                switch results {
+                case .success(let x):
+                    print("success \(String(describing: x))")
+                    exp2.fulfill()
+                case .failure(let error):
+                    print("error--: \(error.localizedDescription)")
+                    XCTFail()
+                }
+            }
+            waitForExpectations(timeout: 2, handler: nil)
+            XCTAssertTrue(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+            // *******
+            // Enable Dev Mode
+            // *******
+            let devModeEnabled = try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId)
+            let exp3 = expectation(description: "enable dev mode")
+            if (!devModeEnabled) {
+                RealmServer.shared.enableDevMode(appServerId: appServerId, syncServiceId: syncServiceId, syncServiceConfiguration: syncServiceConfig) { results in
+                    switch results {
+                    case .success(let x):
+                        print("success \(String(describing: x))")
+                        exp3.fulfill()
+                    case .failure(let error):
+                        print("error--: \(error.localizedDescription)")
+                        XCTFail()
+                    }
+                }
+            }
+
+            waitForExpectations(timeout: 3, handler: nil)
+            XCTAssertTrue(try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+        } catch {
+            XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
+        }
+        do {
+            let user = try logInUser(for: credentials)
+            var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
+            configuration.objectTypes = objectTypes
+            let realm = try Realm(configuration: configuration)
+            waitForDownloads(for: realm)
+            XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, SwiftSyncTestCase.bigObjectCount)
+        } catch {
+            XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
+        }
+    }
+
     // ???: I used this while writing. Can probably delete it.
     func testClientResetModeInit() {
         do {
