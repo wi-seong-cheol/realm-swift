@@ -378,6 +378,69 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         }
     }
 
+    // temporary testing for the support methods
+    func testSupportMethods() {
+        do {
+            let user = try logInUser(for: basicCredentials())
+
+            let appServerId = try RealmServer.shared.retrieveAppServerId(appId)
+            let syncServiceId = try RealmServer.shared.retrieveSyncServiceId(appServerId: appServerId)
+            guard let syncServiceConfig = try RealmServer.shared.getSyncServiceConfiguration(appServerId: appServerId, syncServiceId: syncServiceId) else { fatalError("precondition failure: no sync service configuration found") }
+
+            XCTAssertTrue(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+            XCTAssertTrue(try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+            let exp1 = expectation(description: "disable sync")
+            RealmServer.shared.disableSync(appServerId: appServerId, syncServiceId: syncServiceId) { results in
+                switch results {
+                case .success(let x):
+                    print("success \(String(describing: x))")
+                    exp1.fulfill()
+                case .failure(let error):
+                    print("error--: \(error.localizedDescription)")
+                    XCTFail()
+                }
+            }
+            waitForExpectations(timeout: 3, handler: nil)
+            XCTAssertFalse(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+
+            let exp2 = expectation(description: "enable sync")
+            RealmServer.shared.enableSync(appServerId: appServerId, syncServiceId: syncServiceId, syncServiceConfiguration: syncServiceConfig) { results in
+                switch results {
+                case .success(let x):
+                    print("success \(String(describing: x))")
+                    exp2.fulfill()
+                case .failure(let error):
+                    print("error--: \(error.localizedDescription)")
+                    XCTFail()
+                }
+            }
+            waitForExpectations(timeout: 3, handler: nil)
+            XCTAssertTrue(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+            XCTAssertFalse(try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+            let exp3 = expectation(description: "enable dev mode")
+            RealmServer.shared.enableDevMode(appServerId: appServerId, syncServiceId: syncServiceId, syncServiceConfiguration: syncServiceConfig) { results in
+                switch results {
+                case .success(let x):
+                    print("success \(String(describing: x))")
+                    exp3.fulfill()
+                case .failure(let error):
+                    print("error--: \(error.localizedDescription)")
+                    XCTFail()
+                }
+            }
+
+            waitForExpectations(timeout: 3, handler: nil)
+            XCTAssertTrue(try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+            //            let realm = try openRealm(partitionValue: "some", user: user)
+        } catch {
+            print("whoops \(error.localizedDescription)")
+        }
+    }
+
+
     // MARK: - Progress notifiers
     func testStreamingDownloadNotifier() {
         do {
