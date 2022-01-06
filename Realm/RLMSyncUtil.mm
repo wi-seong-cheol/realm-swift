@@ -67,7 +67,7 @@ RLMSyncStopPolicy translateStopPolicy(SyncSessionStopPolicy stop_policy) {
 RLMClientResetMode translateClientResetMode(ClientResyncMode mode) {
     switch (mode) {
         case ClientResyncMode::Manual:                      return RLMClientResetModeManual;
-        case ClientResyncMode::SeamlessLoss:                return RLMClientResetModeDiscardLocal;
+        case ClientResyncMode::DiscardLocal:                return RLMClientResetModeDiscardLocal;
     }
     REALM_UNREACHABLE();
 }

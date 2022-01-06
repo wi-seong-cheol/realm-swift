@@ -440,44 +440,9 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         }
     }
 
-    func testClientResetDiscardLocal() {
-        let credentials = basicCredentials()
-
-        let objectTypes = [SwiftPerson.self,
-                           SwiftHugeSyncObject.self,
-                           SwiftCollectionSyncObject.self,
-                           SwiftUUIDPrimaryKeyObject.self,
-                           SwiftStringPrimaryKeyObject.self,
-                           SwiftIntPrimaryKeyObject.self,
-                           SwiftTypesSyncObject.self]
-
-        if (!isParent) {
-            do {
-                let user = try logInUser(for: credentials)
-                var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
-                configuration.objectTypes = objectTypes
-                configuration.syncConfiguration!.notifyBeforeClientReset { realm1, realm2 in
-                    print("hi")
-                }
-                let realm = try Realm(configuration: configuration)
-                try realm.write {
-                    for _ in 0..<SwiftSyncTestCase.bigObjectCount {
-                        realm.add(SwiftHugeSyncObject.create())
-                    }
-                }
-                waitForUploads(for: realm)
-
-                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, SwiftSyncTestCase.bigObjectCount)
-                XCTAssertEqual(realm.configuration.syncConfiguration?.clientResetMode, ClientResetMode.discardLocal)
-                return
-            } catch {
-                XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
-            }
-        }
-        executeChild()
-
-        // ****** Cause a client reset by restarting the sync service.
-        // ****** This causes server sync history to be resynthesized.
+    // block executed after sync mode is disabled and before it's re-enabled
+    // !!!: This method needs to go somewhere else. It's placed here as WIP.
+    func clientReset(block: () throws -> ()) {
         do {
             let appServerId = try RealmServer.shared.retrieveAppServerId(appId)
             let syncServiceId = try RealmServer.shared.retrieveSyncServiceId(appServerId: appServerId)
@@ -500,6 +465,12 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
             }
             waitForExpectations(timeout: 2, handler: nil)
             XCTAssertFalse(try RealmServer.shared.syncEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
+
+            do {
+                try block()
+            } catch {
+                XCTFail("Block failed: \(error.localizedDescription)")
+            }
 
             // *******
             // Enable Sync
@@ -535,21 +506,48 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
                     }
                 }
             }
-
             waitForExpectations(timeout: 3, handler: nil)
             XCTAssertTrue(try RealmServer.shared.devModeEnabled(appServerId: appServerId, syncServiceId: syncServiceId))
         } catch {
             XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
         }
+    }
+
+    // ???: I used this while writing. Can probably delete it.
+    func testClientResetDiscardLocal() {
         do {
-            let user = try logInUser(for: credentials)
+            let user = try logInUser(for: basicCredentials())
             var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
-            configuration.objectTypes = objectTypes
-            let realm = try Realm(configuration: configuration)
-            waitForDownloads(for: realm)
-            XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, SwiftSyncTestCase.bigObjectCount)
+            configuration.objectTypes = [SwiftHugeSyncObject.self]
+            // TODO: Rename/reorder expectations
+//            let exp4 = expectation(description: "Hit client reset callback")
+//            configuration.syncConfiguration?.notifyBeforeClientReset(completion: { localRealm in
+//                let count = localRealm.objects(SwiftHugeSyncObject.self).count
+//                exp4.fulfill()
+//            })
+            do {
+                let realm = try Realm(configuration: configuration)
+                try realm.write {
+                    realm.add(SwiftHugeSyncObject.create())
+                }
+                waitForUploads(for: realm)
+                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
+            }
+            clientReset {
+                // Add another object to local realm while sync is disabled
+                let realm = try Realm(configuration: configuration)
+                try realm.write {
+                    realm.add(SwiftHugeSyncObject.create())
+                }
+                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 2)
+            }
+            do {
+                let realm = try Realm(configuration: configuration)
+                // except server realm to overwrite local copy !!!: Not sure if this'll work. I think I need to make a write on the server copy, not local copy
+                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
+            }
         } catch {
-            XCTFail("Got an error: \(error) (process: \(isParent ? "parent" : "child"))")
+            XCTFail("Failed: \(error.localizedDescription)")
         }
     }
 

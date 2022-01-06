@@ -233,14 +233,15 @@ public typealias ClientResetMode = RLMClientResetMode
     // TODO: docs
     public let clientResetMode: ClientResetMode
     // ???: Shorten names?
-    public func notifyBeforeClientReset(completion: (_ local: Realm, _ remote: Realm) -> ()) {
-        self.asConfig().notify { local, remote in
-            print("before")
+    public func notifyBeforeClientReset(completion: @escaping (_ localRealm: Realm) -> ()) {
+        asConfig().notify { localRlmRealm in
+            completion(Realm(localRlmRealm))
         }
     }
-    public func notifyAfterClientReset(completion: (_ local: Realm) -> ()) {
-        self.asConfig().notify { local in
-            print("after")
+
+    public func notifyAfterClientReset(completion: @escaping (_ localRealm: Realm, _ remoteRealm: Realm) -> ()) {
+        asConfig().notify { localRlmRealm, remoteRlmRealm in
+            completion(Realm(localRlmRealm), Realm(remoteRlmRealm))
         }
     }
 

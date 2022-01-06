@@ -20,7 +20,9 @@
 
 #import "RLMApp_Private.hpp"
 #import "RLMBSON_Private.hpp"
+#import "RLMRealm_Private.hpp"
 #import "RLMRealmConfiguration+Sync.h"
+#import "RLMSchema_private.hpp"
 #import "RLMSyncManager_Private.hpp"
 #import "RLMSyncSession_Private.hpp"
 #import "RLMSyncUtil_Private.hpp"
@@ -115,12 +117,25 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
     return _config->cancel_waits_on_nonfatal_error;
 }
 
-- (void)notifyBeforeClientReset:(void(^)(RLMRealm *local, RLMRealm *remote))callback {
-
+- (void)notifyBeforeClientReset:(RLMClientResetBeforeBlock)callback {
+    _config->notify_before_client_reset = [callback](SharedRealm local) {
+        RLMSchema *schema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
+        RLMRealm *realm = [RLMRealm realmWithSharedRealm:local schema:schema];
+        callback(realm);
+    };
 }
-- (void)notifyAfterClientReset:(void(^)(RLMRealm *local))callback {
 
+- (void)notifyAfterClientReset:(RLMClientResetAfterBlock)callback {
+    _config->notify_after_client_reset = [callback](SharedRealm local, SharedRealm remote) {
+        RLMSchema *localSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
+        RLMRealm *localRealm = [RLMRealm realmWithSharedRealm:local schema:localSchema];
+
+        RLMSchema *remoteSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:remote->schema()];
+        RLMRealm *remoteRealm = [RLMRealm realmWithSharedRealm:remote schema:remoteSchema];
+        callback(localRealm, remoteRealm);
+    };
 }
+
 
 - (void)setCancelAsyncOpenOnNonFatalErrors:(bool)cancelAsyncOpenOnNonFatalErrors {
     _config->cancel_waits_on_nonfatal_error = cancelAsyncOpenOnNonFatalErrors;
@@ -143,7 +158,7 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
                       partitionValue:partitionValue
                        customFileURL:nil
                           stopPolicy:stopPolicy
-                     clientResetMode:RLMClientResetModeManual];
+                     clientResetMode:clientResetMode];
     return config;
 }
 
@@ -219,7 +234,7 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
                 _config->client_resync_mode = realm::ClientResyncMode::Manual;
                 break;
             case RLMClientResetModeDiscardLocal:
-                _config->client_resync_mode = realm::ClientResyncMode::SeamlessLoss;
+                _config->client_resync_mode = realm::ClientResyncMode::DiscardLocal;
                 break;
             default:
                 _config->client_resync_mode = realm::ClientResyncMode::Manual;

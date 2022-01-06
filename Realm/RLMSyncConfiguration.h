@@ -32,6 +32,10 @@ typedef NS_ENUM(NSUInteger, RLMClientResetMode) {
   RLMClientResetModeDiscardLocal
 };
 
+// TODO: Docs
+typedef void(^RLMClientResetBeforeBlock)(RLMRealm * _Nonnull);
+typedef void(^RLMClientResetAfterBlock)(RLMRealm* _Nonnull, RLMRealm* _Nonnull);
+
 /**
  A configuration object representing configuration state for a Realm which is intended to sync with a Realm Object
  Server.
@@ -51,8 +55,9 @@ typedef NS_ENUM(NSUInteger, RLMClientResetMode) {
 // ???: Should the declaration be readonly?
 // TODO: Docs, reorder
 @property (nonatomic) RLMClientResetMode clientResetMode;
-- (void)notifyBeforeClientReset:(void(^)(RLMRealm *local, RLMRealm *remote))callback;
-- (void)notifyAfterClientReset:(void(^)(RLMRealm *local))callback;
+//TODO: Rename withCompletion, like other callback patterns
+- (void)notifyBeforeClientReset:(RLMClientResetBeforeBlock)callback;
+- (void)notifyAfterClientReset:(void(^)(RLMRealm *local, RLMRealm *remote))callback;
 
 /**
  Whether nonfatal connection errors should cancel async opens.
