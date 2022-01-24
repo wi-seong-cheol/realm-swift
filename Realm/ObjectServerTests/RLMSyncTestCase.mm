@@ -18,6 +18,7 @@
 
 #import "RLMSyncTestCase.h"
 
+#import <CommonCrypto/CommonHMAC.h>
 #import <XCTest/XCTest.h>
 #import <Realm/Realm.h>
 
@@ -28,6 +29,7 @@
 #import "RLMSyncConfiguration_Private.h"
 #import "RLMUtil.hpp"
 #import "RLMApp_Private.hpp"
+#import "RLMChildProcessEnvironment.h"
 
 #import <realm/object-store/sync/sync_manager.hpp>
 #import <realm/object-store/sync/sync_session.hpp>
@@ -574,6 +576,61 @@ static NSURL *syncDirectoryForChildProcess() {
     XCTAssertTrue(user.state == RLMUserStateLoggedOut, @"User should have been logged out, but wasn't");
 }
 
+- (NSString *)createJWTWithAppId:(NSString *)appId {
+    NSDictionary *header = @{@"alg": @"HS256", @"typ": @"JWT"};
+    NSDictionary *payload = @{
+        @"aud": appId,
+        @"sub": @"someUserId",
+        @"exp": @1661896476,
+        @"user_data": @{
+            @"name": @"Foo Bar",
+            @"occupation": @"firefighter"
+        },
+        @"my_metadata": @{
+            @"name": @"Bar Foo",
+            @"occupation": @"stock analyst"
+        }
+    };
+
+    NSData *jsonHeader = [NSJSONSerialization  dataWithJSONObject:header options:0 error:nil];
+    NSString *headerString = [[NSString alloc] initWithData:jsonHeader encoding:NSUTF8StringEncoding];
+    NSData *jsonPayload = [NSJSONSerialization  dataWithJSONObject:payload options:0 error:nil];
+    NSString *payloadString = [[NSString alloc] initWithData:jsonPayload encoding:NSUTF8StringEncoding];
+
+    NSString *base64EncodedHeader = [jsonHeader base64EncodedStringWithOptions:0];
+    NSString *base64EncodedPayload = [jsonPayload base64EncodedStringWithOptions:0];
+
+    // Remove padding characters.
+    base64EncodedHeader = [base64EncodedHeader stringByReplacingOccurrencesOfString:@"=" withString:@""];
+    base64EncodedPayload = [base64EncodedPayload stringByReplacingOccurrencesOfString:@"=" withString:@""];
+
+    std::string jwtPayload = [[NSString stringWithFormat:@"%@.%@", base64EncodedHeader, base64EncodedPayload] UTF8String];
+    std::string jwtKey = [@"My_very_confidential_secretttttt" UTF8String];
+
+    NSString *key = @"My_very_confidential_secretttttt";
+    NSString *data = @(jwtPayload.c_str());
+
+    const char *cKey  = [key cStringUsingEncoding:NSASCIIStringEncoding];
+    const char *cData = [data cStringUsingEncoding:NSASCIIStringEncoding];
+
+    unsigned char cHMAC[CC_SHA256_DIGEST_LENGTH];
+    CCHmac(kCCHmacAlgSHA256, cKey, strlen(cKey), cData, strlen(cData), cHMAC);
+
+    NSData *HMAC = [[NSData alloc] initWithBytes:cHMAC
+                                          length:sizeof(cHMAC)];
+    NSString *hmac = [HMAC base64EncodedStringWithOptions:0];
+
+    hmac = [hmac stringByReplacingOccurrencesOfString:@"=" withString:@""];
+    hmac = [hmac stringByReplacingOccurrencesOfString:@"+" withString:@"-"];
+    hmac = [hmac stringByReplacingOccurrencesOfString:@"/" withString:@"_"];
+
+    return [NSString stringWithFormat:@"%@.%@", @(jwtPayload.c_str()), hmac];
+}
+
+- (RLMCredentials *)jwtCredentialWithAppId:(NSString *)appId {
+    return [RLMCredentials credentialsWithJWT:[self createJWTWithAppId:appId]];
+}
+
 - (void)waitForDownloadsForRealm:(RLMRealm *)realm {
     [self waitForDownloadsForRealm:realm error:nil];
 }
@@ -590,7 +647,7 @@ static NSURL *syncDirectoryForChildProcess() {
     NSAssert(session, @"Cannot call with invalid partition value");
     XCTestExpectation *ex = expectation ?: [self expectationWithDescription:@"Wait for download completion"];
     __block NSError *theError = nil;
-    BOOL queued = [session waitForDownloadCompletionOnQueue:nil callback:^(NSError *err) {
+    BOOL queued = [session waitForDownloadCompletionOnQueue:dispatch_get_global_queue(0, 0) callback:^(NSError *err) {
         theError = err;
         [ex fulfill];
     }];
@@ -609,7 +666,7 @@ static NSURL *syncDirectoryForChildProcess() {
     NSAssert(session, @"Cannot call with invalid Realm");
     XCTestExpectation *ex = [self expectationWithDescription:@"Wait for upload completion"];
     __block NSError *completionError;
-    BOOL queued = [session waitForUploadCompletionOnQueue:nil callback:^(NSError *error) {
+    BOOL queued = [session waitForUploadCompletionOnQueue:dispatch_get_global_queue(0, 0) callback:^(NSError *error) {
         completionError = error;
         [ex fulfill];
     }];
@@ -674,9 +731,12 @@ static NSURL *syncDirectoryForChildProcess() {
     if (auto ids = NSProcessInfo.processInfo.environment[@"RLMParentAppIds"]) {
         _appIds = [ids componentsSeparatedByString:@","];   //take the one array for split the string
     }
-    [NSFileManager.defaultManager removeItemAtURL:self.clientDataRoot error:nil];
-    [NSFileManager.defaultManager createDirectoryAtURL:self.clientDataRoot
-                           withIntermediateDirectories:YES attributes:nil error:nil];
+    NSURL *clientDataRoot = self.clientDataRoot;
+    [NSFileManager.defaultManager removeItemAtURL:clientDataRoot error:nil];
+    NSError *error;
+    [NSFileManager.defaultManager createDirectoryAtURL:clientDataRoot
+                           withIntermediateDirectories:YES attributes:nil error:&error];
+    XCTAssertNil(error);
 }
 
 - (void)tearDown {
@@ -684,72 +744,71 @@ static NSURL *syncDirectoryForChildProcess() {
     [super tearDown];
 }
 
-- (void)setupSyncManager {
-    static NSString *s_appId;
-    if (self.isParent && s_appId) {
-        _appId = s_appId;
-    }
-    else {
-        NSError *error;
-        _appId = NSProcessInfo.processInfo.environment[@"RLMParentAppId"] ?: [RealmServer.shared createAppAndReturnError:&error];
-        if (error) {
-            NSLog(@"Failed to create app: %@", error);
-            abort();
-        }
-
-        if (self.isParent) {
-            s_appId = _appId;
-        }
-    }
-
-    _app = [RLMApp appWithId:_appId configuration:self.defaultAppConfiguration rootDirectory:self.clientDataRoot];
-
-    RLMSyncManager *syncManager = self.app.syncManager;
-    syncManager.logLevel = RLMSyncLogLevelTrace;
-    syncManager.userAgent = self.name;
-}
-
 - (NSString *)appId {
     if (!_appId) {
-        [self setupSyncManager];
+        static NSString *s_appId;
+        if (self.isParent && s_appId) {
+            _appId = s_appId;
+        }
+        else {
+            NSError *error;
+            _appId = NSProcessInfo.processInfo.environment[@"RLMParentAppId"] ?: [RealmServer.shared createAppAndReturnError:&error];
+            if (error) {
+                NSLog(@"Failed to create app: %@", error);
+                abort();
+            }
+
+            if (self.isParent) {
+                s_appId = _appId;
+            }
+        }
     }
     return _appId;
 }
 
 - (RLMApp *)app {
     if (!_app) {
-        [self setupSyncManager];
+        _app = [RLMApp appWithId:self.appId configuration:self.defaultAppConfiguration rootDirectory:self.clientDataRoot];
+        RLMSyncManager *syncManager = self.app.syncManager;
+        syncManager.logLevel = RLMSyncLogLevelTrace;
+        syncManager.userAgent = self.name;
     }
     return _app;
 }
 
 - (void)resetSyncManager {
-    if (!_appId) {
-        return;
-    }
+    _app = nil;
+    [self resetAppCache];
+}
 
+- (void)resetAppCache {
+    NSArray<RLMApp *> *apps = [RLMApp allApps];
     NSMutableArray<XCTestExpectation *> *exs = [NSMutableArray new];
-    [self.app.allUsers enumerateKeysAndObjectsUsingBlock:^(NSString *, RLMUser *user, BOOL *) {
-        XCTestExpectation *ex = [self expectationWithDescription:@"Wait for logout"];
-        [exs addObject:ex];
-        [user logOutWithCompletion:^(NSError *) {
-            [ex fulfill];
-        }];
+    for (RLMApp *app : apps) @autoreleasepool {
+        [app.allUsers enumerateKeysAndObjectsUsingBlock:^(NSString *, RLMUser *user, BOOL *) {
+            XCTestExpectation *ex = [self expectationWithDescription:@"Wait for logout"];
+            [exs addObject:ex];
+            [user logOutWithCompletion:^(NSError *) {
+                [ex fulfill];
+            }];
 
-        // Sessions are removed from the user asynchronously after a logout.
-        // We need to wait for this to happen before calling resetForTesting as
-        // that expects all sessions to be cleaned up first.
-        if (user.allSessions.count) {
-            [exs addObject:[self expectationForPredicate:[NSPredicate predicateWithFormat:@"allSessions.@count == 0"]
-                                     evaluatedWithObject:user handler:nil]];
-        }
-    }];
+            // Sessions are removed from the user asynchronously after a logout.
+            // We need to wait for this to happen before calling resetForTesting as
+            // that expects all sessions to be cleaned up first.
+            if (user.allSessions.count) {
+                [exs addObject:[self expectationForPredicate:[NSPredicate predicateWithFormat:@"allSessions.@count == 0"]
+                                         evaluatedWithObject:user handler:nil]];
+            }
+        }];
+    }
 
     if (exs.count) {
         [self waitForExpectations:exs timeout:60.0];
     }
 
-    [self.app.syncManager resetForTesting];
+    for (RLMApp *app : apps) {
+        [app.syncManager resetForTesting];
+    }
     [RLMApp resetAppCache];
 }
 

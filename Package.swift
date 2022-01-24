@@ -3,8 +3,8 @@
 import PackageDescription
 import Foundation
 
-let coreVersionStr = "11.0.3"
-let cocoaVersionStr = "10.8.1"
+let coreVersionStr = "11.8.0"
+let cocoaVersionStr = "10.21.1"
 
 let coreVersionPieces = coreVersionStr.split(separator: ".")
 let coreVersionExtra = coreVersionPieces[2].split(separator: "-")
@@ -46,7 +46,7 @@ func hostMachineArch() -> String {
     return String(bytes: machineBytes, encoding: .utf8)!
 }
 let testSwiftSettings: [SwiftSetting]?
-#if swift(>=5.4)
+#if swift(>=5.4) && !swift(>=5.5)
 testSwiftSettings = [.unsafeFlags(["-target", "\(hostMachineArch())-apple-macosx11.0"])]
 #else
 testSwiftSettings = nil
@@ -150,6 +150,7 @@ let package = Package(
                 "RealmSwift.podspec",
                 "SUPPORT.md",
                 "build.sh",
+                "ci_scripts/ci_post_clone.sh",
                 "contrib",
                 "dependencies.list",
                 "docs",
@@ -260,6 +261,8 @@ let package = Package(
                 "fileformat-pre-null.realm",
                 "mixed_tests.py",
                 "set_tests.py",
+                "SwiftUISyncTestHost",
+                "SwiftUISyncTestHostUITests"
             ],
             cxxSettings: testCxxSettings
         ),
@@ -274,7 +277,10 @@ let package = Package(
             name: "RealmSwiftTests",
             dependencies: ["RealmSwift", "RealmTestSupport"],
             path: "RealmSwift/Tests",
-            exclude: ["RealmSwiftTests-Info.plist"],
+            exclude: [
+                "RealmSwiftTests-Info.plist",
+                "QueryTests.swift.gyb"
+            ],
             swiftSettings: testSwiftSettings
         ),
 
@@ -294,7 +300,8 @@ let package = Package(
                  "SwiftSyncTestCase.swift",
                  "TimeoutProxyServer.swift",
                  "WatchTestUtility.swift",
-                 "RealmServer.swift"
+                 "RealmServer.swift",
+                 "SwiftServerObjects.swift"
             ]
         ),
         objectServerTestTarget(
@@ -303,6 +310,8 @@ let package = Package(
                 "SwiftObjectServerTests.swift",
                 "SwiftCollectionSyncTests.swift",
                 "SwiftObjectServerPartitionTests.swift",
+                "SwiftUIServerTests.swift",
+                "SwiftMongoClientTests.swift"
             ]
         ),
         objectServerTestTarget(
@@ -312,7 +321,7 @@ let package = Package(
                 "RLMCollectionSyncTests.mm",
                 "RLMObjectServerPartitionTests.mm",
                 "RLMObjectServerTests.mm",
-                "RLMWatchTestUtility.m",
+                "RLMWatchTestUtility.m"
             ]
         )
     ],

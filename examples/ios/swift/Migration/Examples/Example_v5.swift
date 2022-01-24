@@ -29,22 +29,22 @@ let schemaVersion = 5
 // - Change the `Address` from `Object` to `EmbeddedObject`.
 //
 // Be aware that this only works if there is only one `LinkingObject` per `Address`.
-// See https://github.com/realm/realm-cocoa/issues/7060
+// See https://github.com/realm/realm-swift/issues/7060
 
-// Renaming tables is not supported yet: https://github.com/realm/realm-cocoa/issues/2491
+// Renaming tables is not supported yet: https://github.com/realm/realm-swift/issues/2491
 // The recommended way is to create a new type instead and migrate the old type.
 // Here we create `Pet` and migrate its data from `Dog` so simulate renaming the table.
 
 class Pet: Object {
-    @objc enum Kind: Int, RealmEnum {
+    enum Kind: Int, PersistableEnum {
         case unspecified
         case dog
         case chicken
         case cow
     }
 
-    @objc dynamic var name = ""
-    @objc dynamic var kind = Kind.unspecified
+    @Persisted var name = ""
+    @Persisted var kind = Kind.unspecified
 
     convenience init(name: String, kind: Kind) {
         self.init()
@@ -54,10 +54,10 @@ class Pet: Object {
 }
 
 class Person: Object {
-    @objc dynamic var fullName = ""
-    @objc dynamic var age = 0
-    @objc dynamic var address: Address?
-    let pets = List<Pet>()
+    @Persisted var fullName = ""
+    @Persisted var age = 0
+    @Persisted var address: Address?
+    @Persisted var pets: List<Pet>
     convenience init(fullName: String, age: Int, address: Address?) {
         self.init()
         self.fullName = fullName
@@ -67,9 +67,10 @@ class Person: Object {
 }
 
 class Address: EmbeddedObject {
-    @objc dynamic var street = ""
-    @objc dynamic var city = ""
-    let residents: LinkingObjects = LinkingObjects(fromType: Person.self, property: "address")
+    @Persisted var street = ""
+    @Persisted var city = ""
+    @Persisted(originProperty: "address")
+    var residents: LinkingObjects<Person>
     convenience init(street: String, city: String) {
         self.init()
         self.street = street
@@ -112,7 +113,7 @@ let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
         // This branch is only relevant for version 2. If we are migration from a previous
         // version, we would not be able to access `dogs` since they did not exist back there.
         // Migration from v0 and v1 to v3 is done in the previous blocks.
-        // Related issue: https://github.com/realm/realm-cocoa/issues/6263
+        // Related issue: https://github.com/realm/realm-swift/issues/6263
         migration.enumerateObjects(ofType: Person.className()) { oldObject, newObject in
             let pets = newObject!["pets"] as! List<MigrationObject>
             for dog in oldObject!["dogs"] as! List<DynamicObject> {
@@ -121,7 +122,7 @@ let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
             }
         }
         // We enumerate the old dog list to make sure all dogs get added, even those without an owner.
-        // Related issue: https://github.com/realm/realm-cocoa/issues/6734
+        // Related issue: https://github.com/realm/realm-swift/issues/6734
         migration.enumerateObjects(ofType: "Dog") { oldDogObject, _ in
             var dogFound = false
             migration.enumerateObjects(ofType: Person.className()) { _, newObject in
@@ -135,7 +136,7 @@ let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
             }
         }
         // The data cannot be deleted just yet since the table is target of cross-table link columns.
-        // See https://github.com/realm/realm-cocoa/issues/3686
+        // See https://github.com/realm/realm-swift/issues/3686
         // migration.deleteData(forType: "Dog")
     }
     if oldSchemaVersion < 4 {
@@ -145,11 +146,6 @@ let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
                 newObject!["address"] = address
             }
         }
-    }
-    if oldSchemaVersion < 5 {
-        // Nothing to do here. The `Address` gets migrated to a `LinkingObject` automatically if
-        // it has only one linked object.
-        // See https://github.com/realm/realm-cocoa/issues/7060
     }
 }
 

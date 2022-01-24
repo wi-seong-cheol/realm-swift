@@ -243,6 +243,27 @@ static double average(NSArray *values) {
     uncheckedAssertEqualObjects([unmanaged.intObj objectAtIndex:0], @1);
 }
 
+- (void)testObjectsAtIndexes {
+    NSMutableIndexSet *indexSet = [NSMutableIndexSet new];
+    [indexSet addIndex:0];
+    [indexSet addIndex:2];
+    XCTAssertNil([unmanaged.intObj objectsAtIndexes:indexSet]);
+    XCTAssertNil([managed.intObj objectsAtIndexes:indexSet]);
+
+    [unmanaged.intObj addObject:@1];
+    [unmanaged.intObj addObject:@2];
+    [unmanaged.intObj addObject:@3];
+    uncheckedAssertEqualObjects([unmanaged.intObj objectsAtIndexes:indexSet], (@[@1, @3]));
+    [managed.intObj addObject:@1];
+    [managed.intObj addObject:@2];
+    [managed.intObj addObject:@3];
+    uncheckedAssertEqualObjects([managed.intObj objectsAtIndexes:indexSet], (@[@1, @3]));
+
+    [indexSet addIndex:3];
+    XCTAssertNil([unmanaged.intObj objectsAtIndexes:indexSet]);
+    XCTAssertNil([managed.intObj objectsAtIndexes:indexSet]);
+}
+
 - (void)testFirstObject {
     uncheckedAssertNil($allArrays.firstObject);
 
@@ -1102,11 +1123,11 @@ static NSArray *sortedDistinctUnion(id array, NSString *type, NSString *prop) {
 - (void)testQuerySum {
     [realm deleteAllObjects];
 
-    %noany %nodate %nosum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum = %@", $v0]), ^n @"@sum can only be applied to a numeric property.");
+    %noany %nodate %nosum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum = %@", $v0]), ^n @"Invalid keypath '$prop.@sum': @sum can only be applied to a collection of numeric values.");
     %noany %date %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum = %@", $v0]), ^n @"Cannot sum or average date properties");
 
     %noany %sum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum = %@", $wrong]), ^n @"@sum on a property of type $basetype cannot be compared with '$wdesc'");
-    %noany %sum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum.prop = %@", $wrong]), ^n @"Property '$prop' is not a link in object of type '$class'");
+    %noany %sum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum.prop = %@", $wrong]), ^n @"Invalid keypath '$prop.@sum.prop': @sum on a collection of values must appear at the end of a keypath.");
     %noany %sum %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@sum = %@", NSNull.null]), ^n @"@sum on a property of type $basetype cannot be compared with '<null>'");
 
     [AllPrimitiveArrays createInRealm:realm withValue:@{
@@ -1146,12 +1167,12 @@ static NSArray *sortedDistinctUnion(id array, NSString *type, NSString *prop) {
 - (void)testQueryAverage {
     [realm deleteAllObjects];
 
-    %noany %nodate %noavg %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg = %@", $v0]), ^n @"@avg can only be applied to a numeric property.");
+    %noany %nodate %noavg %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg = %@", $v0]), ^n @"Invalid keypath '$prop.@avg': @avg can only be applied to a collection of numeric values.");
     %noany %date %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg = %@", $v0]), ^n @"Cannot sum or average date properties");
     %noany %any %date %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg = %@", $v0]), ^n @"Cannot sum or average date properties");
 
     %noany %avg %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg = %@", $wrong]), ^n @"@avg on a property of type $basetype cannot be compared with '$wdesc'");
-    %noany %avg %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg.prop = %@", $wrong]), ^n @"Property '$prop' is not a link in object of type '$class'");
+    %noany %avg %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@avg.prop = %@", $wrong]), ^n @"Invalid keypath '$prop.@avg.prop': @avg on a collection of values must appear at the end of a keypath.");
 
     [AllPrimitiveArrays createInRealm:realm withValue:@{
         %man %r %avg @"$prop": @[],
@@ -1190,9 +1211,9 @@ static NSArray *sortedDistinctUnion(id array, NSString *type, NSString *prop) {
 - (void)testQueryMin {
     [realm deleteAllObjects];
 
-    %noany %nominmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@min = %@", $v0]), ^n @"@min can only be applied to a numeric property.");
+    %noany %nominmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@min = %@", $v0]), ^n @"Invalid keypath '$prop.@min': @min can only be applied to a collection of numeric values.");
     %noany %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@min = %@", $wrong]), ^n @"@min on a property of type $basetype cannot be compared with '$wdesc'");
-    %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@min.prop = %@", $wrong]), ^n @"Property '$prop' is not a link in object of type '$class'");
+    %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@min.prop = %@", $wrong]), ^n @"Invalid keypath '$prop.@min.prop': @min on a collection of values must appear at the end of a keypath.");
 
     // No objects, so count is zero
     %minmax %man RLMAssertCount($class, 0U, @"$prop.@min == %@", $v0);
@@ -1235,9 +1256,9 @@ static NSArray *sortedDistinctUnion(id array, NSString *type, NSString *prop) {
 - (void)testQueryMax {
     [realm deleteAllObjects];
 
-    %noany %nominmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@max = %@", $v0]), ^n @"@max can only be applied to a numeric property.");
+    %noany %nominmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@max = %@", $v0]), ^n @"Invalid keypath '$prop.@max': @max can only be applied to a collection of numeric values.");
     %noany %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@max = %@", $wrong]), ^n @"@max on a property of type $basetype cannot be compared with '$wdesc'");
-    %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@max.prop = %@", $wrong]), ^n @"Property '$prop' is not a link in object of type '$class'");
+    %minmax %man RLMAssertThrowsWithReason(([$class objectsInRealm:realm where:@"$prop.@max.prop = %@", $wrong]), ^n @"Invalid keypath '$prop.@max.prop': @max on a collection of values must appear at the end of a keypath.");
 
     // No objects, so count is zero
     %minmax %man RLMAssertCount($class, 0U, @"$prop.@max == %@", $v0);
@@ -1366,21 +1387,21 @@ static NSArray *sortedDistinctUnion(id array, NSString *type, NSString *prop) {
     void (^testNull)(NSString *, NSUInteger) = ^(NSString *operator, NSUInteger count) {
         NSString *query = [NSString stringWithFormat:@"ANY stringObj %@ nil", operator];
         RLMAssertThrowsWithReason([AllPrimitiveArrays objectsInRealm:realm where:query],
-                                  @"Expected object of type string for property 'stringObj' on object of type 'AllPrimitiveArrays', but received: (null)");
+                                  @"Cannot compare value '(null)' of type '(null)' to property 'stringObj' of type 'string'");
         RLMAssertCount(AllOptionalPrimitiveArrays, count, query, NSNull.null);
         query = [NSString stringWithFormat:@"ANY link.stringObj %@ nil", operator];
         RLMAssertThrowsWithReason([LinkToAllPrimitiveArrays objectsInRealm:realm where:query],
-                                  @"Expected object of type string for property 'link.stringObj' on object of type 'LinkToAllPrimitiveArrays', but received: (null)");
+                                  @"Cannot compare value '(null)' of type '(null)' to property 'stringObj' of type 'string'");
         RLMAssertCount(LinkToAllOptionalPrimitiveArrays, count, query, NSNull.null);
 
         query = [NSString stringWithFormat:@"ANY dataObj %@ nil", operator];
         RLMAssertThrowsWithReason([AllPrimitiveArrays objectsInRealm:realm where:query],
-                                  @"Expected object of type data for property 'dataObj' on object of type 'AllPrimitiveArrays', but received: (null)");
+                                  @"Cannot compare value '(null)' of type '(null)' to property 'dataObj' of type 'data'");
         RLMAssertCount(AllOptionalPrimitiveArrays, count, query, NSNull.null);
 
         query = [NSString stringWithFormat:@"ANY link.dataObj %@ nil", operator];
         RLMAssertThrowsWithReason([LinkToAllPrimitiveArrays objectsInRealm:realm where:query],
-                                  @"Expected object of type data for property 'link.dataObj' on object of type 'LinkToAllPrimitiveArrays', but received: (null)");
+                                  @"Cannot compare value '(null)' of type '(null)' to property 'dataObj' of type 'data'");
         RLMAssertCount(LinkToAllOptionalPrimitiveArrays, count, query, NSNull.null);
     };
 

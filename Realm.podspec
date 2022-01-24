@@ -11,7 +11,7 @@ Pod::Spec.new do |s|
                               The Realm Mobile Database is a fast, easy-to-use replacement for Core Data & SQLite. Use it with the Realm Mobile Platform for realtime, automatic data sync. Works on iOS, macOS, tvOS & watchOS. Learn more and get help at https://realm.io.
                               DESC
   s.homepage                = "https://realm.io"
-  s.source                  = { :git => 'https://github.com/realm/realm-cocoa.git', :tag => "v#{s.version}" }
+  s.source                  = { :git => 'https://github.com/realm/realm-swift.git', :tag => "v#{s.version}" }
   s.author                  = { 'Realm' => 'help@realm.io' }
   s.library                 = 'c++', 'z'
   s.requires_arc            = true
@@ -77,8 +77,8 @@ Pod::Spec.new do |s|
 
                               # Realm.Private module
   private_header_files      = 'include/RLMAccessor.h',
-                              'include/RLMArray_Private.h',
                               'include/RLMApp_Private.h',
+                              'include/RLMArray_Private.h',
                               'include/RLMBSON_Private.h',
                               'include/RLMCollection_Private.h',
                               'include/RLMDictionary_Private.h',
@@ -89,21 +89,17 @@ Pod::Spec.new do |s|
                               'include/RLMOptionalBase.h',
                               'include/RLMPropertyBase.h',
                               'include/RLMProperty_Private.h',
+                              'include/RLMProviderClient_Private.h',
                               'include/RLMRealmConfiguration_Private.h',
                               'include/RLMRealm_Private.h',
                               'include/RLMResults_Private.h',
                               'include/RLMSchema_Private.h',
                               'include/RLMSet_Private.h',
+                              'include/RLMSwiftProperty.h',
                               'include/RLMSyncConfiguration_Private.h',
                               'include/RLMSyncUtil_Private.h',
-                              'include/RLMFindOneAndModifyOptions_Private.h',
-                              'include/RLMFindOptions_Private.h',
-                              'include/RLMMongoClient_Private.h',
-                              'include/RLMMongoCollection_Private.h',
-                              'include/RLMMongoDatabase_Private.h',
                               'include/RLMUpdateResult_Private.h',
                               'include/RLMUser_Private.h',
-                              'include/RLMProviderClient_Private.h'
 
 
   s.frameworks              = 'Security'

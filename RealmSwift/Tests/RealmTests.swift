@@ -110,7 +110,7 @@ class RealmTests: TestCase {
 
     #if !SWIFT_PACKAGE && DEBUG
     func testFileFormatUpgradeRequiredButDisabled() {
-        var config = Realm.Configuration()
+        var config = Realm.Configuration.defaultConfiguration
         let bundledRealmPath = Bundle(for: RealmTests.self).path(forResource: "fileformat-pre-null.realm",
                                                                  ofType: nil)!
         try! FileManager.default.copyItem(atPath: bundledRealmPath, toPath: config.fileURL!.path)
@@ -941,7 +941,7 @@ class RealmTests: TestCase {
         } catch Realm.Error.fileAccess {
             // Success to catch the error
         } catch {
-            XCTFail("Failed to brigde RLMError to Realm.Error")
+            XCTFail("Failed to bridge RLMError to Realm.Error")
         }
         do {
             _ = try Realm(configuration: Realm.Configuration(fileURL: defaultRealmURL(), readOnly: true))
@@ -949,7 +949,7 @@ class RealmTests: TestCase {
         } catch Realm.Error.fileNotFound {
             // Success to catch the error
         } catch {
-            XCTFail("Failed to brigde RLMError to Realm.Error")
+            XCTFail("Failed to bridge RLMError to Realm.Error")
         }
     }
 

@@ -160,9 +160,10 @@ RLM_COLLECTION_TYPE(Person);
 /// Any stray app ids passed between processes
 @property (nonatomic, readonly) NSArray<NSString *> *appIds;
 
-- (RLMCredentials *)basicCredentialsWithName:(NSString *)name register:(BOOL)shouldRegister;
+- (RLMCredentials *)basicCredentialsWithName:(NSString *)name register:(BOOL)shouldRegister NS_SWIFT_NAME(basicCredentials(name:register:));
 
-- (RLMCredentials *)basicCredentialsWithName:(NSString *)name register:(BOOL)shouldRegister app:(nullable RLMApp*) app;
+- (RLMCredentials *)basicCredentialsWithName:(NSString *)name register:(BOOL)shouldRegister
+                                         app:(nullable RLMApp*)app NS_SWIFT_NAME(basicCredentials(name:register:app:));
 
 /// Synchronously open a synced Realm via asyncOpen and return the Realm.
 - (RLMRealm *)asyncOpenRealmWithConfiguration:(RLMRealmConfiguration *)configuration;
@@ -195,6 +196,8 @@ RLM_COLLECTION_TYPE(Person);
 /// Synchronously create, log in, and return a user.
 - (RLMUser *)logInUserForCredentials:(RLMCredentials *)credentials;
 - (RLMUser *)logInUserForCredentials:(RLMCredentials *)credentials app:(RLMApp *)app;
+
+- (RLMCredentials *)jwtCredentialWithAppId:(NSString *)appId;
 
 /// Synchronously, log out.
 - (void)logOutUser:(RLMUser *)user;
@@ -240,6 +243,8 @@ RLM_COLLECTION_TYPE(Person);
 - (NSString *)partitionBsonType:(id<RLMBSON>)bson;
 
 - (RLMApp *)appFromAppId:(NSString *)appId;
+
+- (void)resetAppCache;
 
 @end
 
