@@ -4,8 +4,7 @@ x.y.z Release notes (yyyy-MM-dd)
 * None.
 
 ### Fixed
-* <How to hit and notice issue? what was the impact?> ([#????](https://github.com/realm/realm-swift/issues/????), since v?.?.?)
-* None.
+* Copy EmbeddedObject for embedded object property on initializing unmanaged object ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
 
 <!-- ### Breaking Changes - ONLY INCLUDE FOR NEW MAJOR version -->
 
@@ -18,6 +17,29 @@ x.y.z Release notes (yyyy-MM-dd)
 
 ### Internal
 * Upgraded realm-core from ? to ?
+
+10.22.0 Release notes (2022-01-25)
+=============================================================
+### Enhancements
+
+* Add beta support for flexible sync. See the [backend](https://docs.mongodb.com/realm/sync/data-access-patterns/flexible-sync/) and [SDK](https://docs.mongodb.com/realm/sdk/swift/examples/flexible-sync/) documentation for more information. Please report any issues with the beta through Github.
+
+### Fixed
+
+* UserIdentity metadata table grows indefinitely. ([#5152](https://github.com/realm/realm-core/issues/5152), since v10.20.0)
+* We now report a useful error message when opening a sync Realm in non-sync mode or vice-versa.([#5161](https://github.com/realm/realm-core/pull/5161), since v5.0.0).
+
+### Compatibility
+
+* Realm Studio: 11.0.0 or later.
+* APIs are backwards compatible with all previous releases in the 10.x.y series.
+* Carthage release for Swift is built with Xcode 13.2.1.
+* CocoaPods: 1.10 or later.
+* Xcode: 12.4-13.2.1.
+
+### Internal
+
+* Upgraded realm-core from 11.8.0 to 11.9.0
 
 10.21.1 Release notes (2022-01-12)
 =============================================================
@@ -750,8 +772,6 @@ r `User.linkUser` methods.
 * Improve performance of many Dictionary operations, especially when KVO is being used.
 
 ### Fixed
-* Copy EmbeddedObject for embedded object property on initializing unmanaged object ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
-* <How to hit and notice issue? what was the impact?> ([#????](https://github.com/realm/realm-cocoa/issues/????), since v?.?.?)
 
 * Calling `-[RLMRealm deleteObjects:]` on a `RLMDictionary` cleared the
   dictionary but did not actually delete the objects in the dictionary (since v10.8.0).
