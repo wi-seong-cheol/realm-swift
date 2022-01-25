@@ -513,37 +513,68 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         }
     }
 
-    // ???: I used this while writing. Can probably delete it.
     func testClientResetDiscardLocal() {
+        // !!!: error handler and cases here while WIP
+        // ***
+        app.syncManager.errorHandler = { (error, _) in
+            guard let syncError = error as? SyncError else {
+                 fatalError("Unexpected error type passed to sync error handler! \(error)")
+             }
+            switch syncError.code {
+            case .clientResetError:
+                print("\(error.localizedDescription)")
+                break
+            case .clientSessionError:
+                break
+            case .clientUserError:
+                break
+            case .clientInternalError:
+                break
+            case .underlyingAuthError:
+                break
+            case .permissionDeniedError:
+                break
+            @unknown default:
+                print("unknown")
+            }
+        }
+        // ***
+        // Seed object, upload to server
         do {
             let user = try logInUser(for: basicCredentials())
             var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
-            configuration.objectTypes = [SwiftHugeSyncObject.self]
-            // TODO: Rename/reorder expectations
-//            let exp4 = expectation(description: "Hit client reset callback")
 //            configuration.syncConfiguration?.notifyBeforeClientReset(completion: { localRealm in
-//                let count = localRealm.objects(SwiftHugeSyncObject.self).count
-//                exp4.fulfill()
+//                print("hit")
 //            })
-            do {
+//            configuration.syncConfiguration?.notifyAfterClientReset(completion: { localRealm, remoteRealm in
+//                print("hi")
+//            })
+            configuration.objectTypes = [SwiftHugeSyncObject.self]
+
+            try autoreleasepool {
                 let realm = try Realm(configuration: configuration)
                 try realm.write {
                     realm.add(SwiftHugeSyncObject.create())
                 }
                 waitForUploads(for: realm)
+                // query mongodb backend before turning
                 XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
             }
+            // Sync is disabled, block executed, sync re-enabled
             clientReset {
-                // Add another object to local realm while sync is disabled
-                let realm = try Realm(configuration: configuration)
-                try realm.write {
-                    realm.add(SwiftHugeSyncObject.create())
+                try autoreleasepool {
+                    let realm = try Realm(configuration: configuration)
+                    try realm.write {
+                        realm.add(SwiftHugeSyncObject.create())
+                    }
+                    XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 2)
                 }
-                XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 2)
+
             }
-            do {
+            try autoreleasepool {
                 let realm = try Realm(configuration: configuration)
-                // except server realm to overwrite local copy !!!: Not sure if this'll work. I think I need to make a write on the server copy, not local copy
+                waitForDownloads(for: realm)
+                // except server realm (1 object) to have overwritten local copy (2 objects)
                 XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
             }
         } catch {
