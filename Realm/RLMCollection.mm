@@ -514,3 +514,15 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMCollection *collection,
 template RLMNotificationToken *RLMAddNotificationBlock<>(RLMManagedArray *, void (^)(id, RLMCollectionChange *, NSError *),  NSArray<NSString *> *, dispatch_queue_t);
 template RLMNotificationToken *RLMAddNotificationBlock<>(RLMManagedSet *, void (^)(id, RLMCollectionChange *, NSError *), NSArray<NSString *> *, dispatch_queue_t);
 template RLMNotificationToken *RLMAddNotificationBlock<>(RLMResults *, void (^)(id, RLMCollectionChange *, NSError *),  NSArray<NSString *> *, dispatch_queue_t);
+
+id<RLMCollection> RLMSnapshot(id<RLMCollection> collection) {
+    if ([collection isKindOfClass:RLMManagedSet.class]) {
+        return [[RLMResults alloc] initWithResults:RLMGetBackingCollection((RLMManagedSet *)collection).snapshot()];
+    } else if ([collection isKindOfClass:RLMManagedArray.class]) {
+        return [[RLMResults alloc] initWithResults:RLMGetBackingCollection((RLMManagedArray *)collection).snapshot()];
+    } else if ([collection isKindOfClass:RLMManagedDictionary.class]) {
+        return [[RLMResults alloc] initWithResults:RLMGetBackingCollection((RLMManagedDictionary *)collection).snapshot()];
+    } else {
+        return ((RLMResults *)collection).snapshot;
+    }
+}

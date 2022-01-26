@@ -90,7 +90,7 @@ private func createEquatableBinding<T: ThreadConfined, V: Equatable>(
     forKeyPath keyPath: ReferenceWritableKeyPath<T, V>) -> Binding<V> {
 
     guard let value = value.isFrozen ? value.thaw() : value else {
-        throwRealmException("Could not bind value")
+        return Binding(get: { value[keyPath: keyPath] }, set: {_ in })
     }
 
     var lastValue = value[keyPath: keyPath]
@@ -243,19 +243,19 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
     var keyPaths: [String]?
 
     init(_ value: ObservedType, _ keyPaths: [String]? = nil) {
-        self.value = value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value
+        self.value = value.realm != nil && !value.isInvalidated ? value : value
         self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
         self.keyPaths = keyPaths
     }
 
     init(_ value: ObservedType, _ keyPaths: [String]? = nil) where ObservedType: ObjectBase {
-        self.value = value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value
+        self.value = value.realm != nil && !value.isInvalidated ? value : value
         self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
         self.keyPaths = keyPaths
     }
 
     init(_ value: ObservedType, _ keyPaths: [String]? = nil) where ObservedType: ProjectionObservable {
-        self.value = value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value
+        self.value = value.realm != nil && !value.isInvalidated ? value : value
         self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
         self.keyPaths = keyPaths
     }
@@ -467,7 +467,7 @@ extension Projection: _ObservedResultsValue { }
         if !storage.setupHasRun {
             storage.setupValue()
         }
-        return storage.configuration != nil ? storage.value.freeze() : storage.value
+        return storage.configuration != nil ? Results(RLMSnapshot(storage.value.collection)) : Results(RLMSnapshot(storage.value.collection))
     }
     /// :nodoc:
     public var projectedValue: Self {
@@ -1587,12 +1587,14 @@ extension View {
     private func filterCollection<T: ObjectBase>(_ collection: ObservedResults<T>, for text: String, on keyPath: KeyPath<T, String>) {
         DispatchQueue.main.async {
             if text.isEmpty {
-                collection.filter = nil
+                if collection.filter != nil {
+                    collection.filter = nil
+                }
             } else {
                 collection.filter = Query<T>()[dynamicMember: keyPath].contains(text).predicate
             }
         }
-    }
+    }   
 }
 #endif
 #else

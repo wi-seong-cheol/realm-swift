@@ -35,4 +35,6 @@ typedef RLM_CLOSED_ENUM(int32_t, RLMCollectionType) {
     RLMCollectionTypeDictionary = 2
 };
 
+FOUNDATION_EXTERN id<RLMCollection> RLMSnapshot(id<RLMCollection> collection);
+
 NS_ASSUME_NONNULL_END
