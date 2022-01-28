@@ -542,13 +542,15 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
         // Seed object, upload to server
         do {
             let user = try logInUser(for: basicCredentials())
-            var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
-//            configuration.syncConfiguration?.notifyBeforeClientReset(completion: { localRealm in
-//                print("hit")
-//            })
-//            configuration.syncConfiguration?.notifyAfterClientReset(completion: { localRealm, remoteRealm in
-//                print("hi")
-//            })
+//            var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal)
+            var configuration = user.configuration(partitionValue: #function, clientResetMode: .discardLocal) /*{ local in
+            print("hi")
+            } notifyAfterReset: { local, remote in
+                print("hi")
+            }*/
+
+            
+            // check to make sure that the blocks are making it down in assignment
             configuration.objectTypes = [SwiftHugeSyncObject.self]
 
             try autoreleasepool {
@@ -557,9 +559,10 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
                     realm.add(SwiftHugeSyncObject.create())
                 }
                 waitForUploads(for: realm)
-                // query mongodb backend before turning
+                sleep(10) // Wait for uploads isn't a guarantee that the server realm has committed data to server realm.
                 XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
             }
+
             // Sync is disabled, block executed, sync re-enabled
             clientReset {
                 try autoreleasepool {
@@ -569,12 +572,11 @@ class SwiftObjectServerTests: SwiftSyncTestCase {
                     }
                     XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 2)
                 }
-
             }
             try autoreleasepool {
                 let realm = try Realm(configuration: configuration)
                 waitForDownloads(for: realm)
-                // except server realm (1 object) to have overwritten local copy (2 objects)
+                // TODO: Check server logs to figure out why no object is downloaded after reset.
                 XCTAssertEqual(realm.objects(SwiftHugeSyncObject.self).count, 1)
             }
         } catch {

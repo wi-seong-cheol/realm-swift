@@ -117,25 +117,16 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
     return _config->cancel_waits_on_nonfatal_error;
 }
 
-- (void)notifyBeforeClientReset:(RLMClientResetBeforeBlock)callback {
-    _config->notify_before_client_reset = [callback](SharedRealm local) {
-        RLMSchema *schema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
-        RLMRealm *realm = [RLMRealm realmWithSharedRealm:local schema:schema];
-        callback(realm);
-    };
-}
-
-- (void)notifyAfterClientReset:(RLMClientResetAfterBlock)callback {
-    _config->notify_after_client_reset = [callback](SharedRealm local, SharedRealm remote) {
-        RLMSchema *localSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
-        RLMRealm *localRealm = [RLMRealm realmWithSharedRealm:local schema:localSchema];
-
-        RLMSchema *remoteSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:remote->schema()];
-        RLMRealm *remoteRealm = [RLMRealm realmWithSharedRealm:remote schema:remoteSchema];
-        callback(localRealm, remoteRealm);
-    };
-}
-
+// create
+//- (RLMClientResetBeforeBlock)beforeClientReset {
+////    return _beforeClientReset;
+//    return ^(){ _config->notify_before_client_reset() };
+//}
+////
+//- (RLMClientResetAfterBlock)afterClientReset {
+//    return _afterClientReset;
+////   return _config->notify_after_client_reset;
+//}
 
 - (void)setCancelAsyncOpenOnNonFatalErrors:(bool)cancelAsyncOpenOnNonFatalErrors {
     _config->cancel_waits_on_nonfatal_error = cancelAsyncOpenOnNonFatalErrors;
@@ -153,13 +144,16 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
 - (instancetype)initWithUser:(RLMUser *)user
               partitionValue:(nullable id<RLMBSON>)partitionValue
                   stopPolicy:(RLMSyncStopPolicy)stopPolicy
-             clientResetMode:(RLMClientResetMode)clientResetMode {
-    auto config = [self initWithUser:user
-                      partitionValue:partitionValue
-                       customFileURL:nil
-                          stopPolicy:stopPolicy
-                     clientResetMode:clientResetMode];
-    return config;
+             clientResetMode:(RLMClientResetMode)clientResetMode
+           notifyBeforeReset:(nullable RLMClientResetBeforeBlock)beforeResetBlock
+            notifyAfterReset:(nullable RLMClientResetAfterBlock)afterResetBlock {
+    return [self initWithUser:user
+               partitionValue:partitionValue
+                customFileURL:nil
+                   stopPolicy:stopPolicy
+              clientResetMode:clientResetMode
+            notifyBeforeReset:beforeResetBlock
+             notifyAfterReset:afterResetBlock];
 }
 
 - (instancetype)initWithUser:(RLMUser *)user
@@ -167,6 +161,22 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
                customFileURL:(nullable NSURL *)customFileURL
                   stopPolicy:(RLMSyncStopPolicy)stopPolicy
              clientResetMode:(RLMClientResetMode)clientResetMode {
+    return [self initWithUser:user
+               partitionValue:partitionValue
+                customFileURL:customFileURL
+                   stopPolicy:stopPolicy
+              clientResetMode:clientResetMode
+            notifyBeforeReset:nil
+             notifyAfterReset:nil];
+}
+
+- (instancetype)initWithUser:(RLMUser *)user
+              partitionValue:(id<RLMBSON>)partitionValue
+               customFileURL:(nullable NSURL *)customFileURL
+                  stopPolicy:(RLMSyncStopPolicy)stopPolicy
+             clientResetMode:(RLMClientResetMode)clientResetMode
+           notifyBeforeReset:(RLMClientResetBeforeBlock)beforeResetBlock
+            notifyAfterReset:(RLMClientResetAfterBlock)afterResetBlock {
     if (self = [super init]) {
         std::stringstream s;
         s << RLMConvertRLMBSONToBson(partitionValue);
@@ -229,15 +239,30 @@ RLMSyncSystemErrorKind errorKindForSyncError(SyncError error) {
                 errorHandler(nsError, session);
             });
         };
-        switch (clientResetMode) {
-            case RLMClientResetModeManual:
-                _config->client_resync_mode = realm::ClientResyncMode::Manual;
-                break;
-            case RLMClientResetModeDiscardLocal:
-                _config->client_resync_mode = realm::ClientResyncMode::DiscardLocal;
-                break;
-            default:
-                _config->client_resync_mode = realm::ClientResyncMode::Manual;
+        // Default to manual mode
+        _config->client_resync_mode = (clientResetMode) ? translateClientResetMode(clientResetMode) : realm::ClientResyncMode::Manual;
+
+        // TODO: What about setting to nil?
+        if (beforeResetBlock) {
+            _config->notify_before_client_reset = [beforeResetBlock](SharedRealm local) {
+                RLMSchema *schema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
+                RLMRealm *realm = [RLMRealm realmWithSharedRealm:local schema:schema];
+                beforeResetBlock(realm);
+            };
+            _beforeClientReset = beforeResetBlock;
+        }
+
+        // TODO: What about setting to nil?
+        if (afterResetBlock) {
+            _config->notify_after_client_reset = [afterResetBlock](SharedRealm local, SharedRealm remote) {
+                RLMSchema *localSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:local->schema()];
+                RLMRealm *localRealm = [RLMRealm realmWithSharedRealm:local schema:localSchema];
+
+                RLMSchema *remoteSchema = [RLMSchema dynamicSchemaFromObjectStoreSchema:remote->schema()];
+                RLMRealm *remoteRealm = [RLMRealm realmWithSharedRealm:remote schema:remoteSchema];
+                afterResetBlock(localRealm, remoteRealm);
+            };
+            _afterClientReset = afterResetBlock;
         }
 
         if (NSString *authorizationHeaderName = manager.authorizationHeaderName) {

@@ -72,6 +72,14 @@ RLMClientResetMode translateClientResetMode(ClientResyncMode mode) {
     REALM_UNREACHABLE();
 }
 
+ClientResyncMode translateClientResetMode(RLMClientResetMode mode) {
+    switch (mode) {
+        case RLMClientResetModeManual:                      return ClientResyncMode::Manual;
+        case RLMClientResetModeDiscardLocal:                return ClientResyncMode::DiscardLocal;
+    }
+    REALM_UNREACHABLE();
+}
+
 std::shared_ptr<SyncSession> sync_session_for_realm(RLMRealm *realm) {
     Realm::Config realmConfig = realm.configuration.config;
     if (auto config = realmConfig.sync_config) {

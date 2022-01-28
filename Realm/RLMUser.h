@@ -112,6 +112,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (RLMRealmConfiguration *)configurationWithPartitionValue:(nullable id<RLMBSON>)partitionValue
                                            clientResetMode:(RLMClientResetMode)clientResetMode NS_REFINED_FOR_SWIFT;
 
+- (RLMRealmConfiguration *)configurationWithPartitionValue:(nullable id<RLMBSON>)partitionValue
+                                           clientResetMode:(RLMClientResetMode)clientResetMode
+                                         notifyBeforeReset:(nullable RLMClientResetBeforeBlock)beforeResetBlock
+                                          notifyafterReset:(nullable RLMClientResetAfterBlock)afterResetBlock NS_REFINED_FOR_SWIFT;
+
 #pragma mark - Sessions
 
 /**

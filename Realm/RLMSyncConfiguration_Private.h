@@ -33,7 +33,9 @@ typedef RLM_CLOSED_ENUM(NSUInteger, RLMSyncStopPolicy) {
 - (instancetype)initWithUser:(RLMUser *)user
               partitionValue:(nullable id<RLMBSON>)partitionValue
                   stopPolicy:(RLMSyncStopPolicy)stopPolicy
-             clientResetMode:(RLMClientResetMode)clientResetMode;
+             clientResetMode:(RLMClientResetMode)clientResetMode
+           notifyBeforeReset:(nullable RLMClientResetBeforeBlock)beforeResetBlock
+            notifyAfterReset:(nullable RLMClientResetAfterBlock)afterResetBlock;
 
 @property (nonatomic, readwrite) RLMSyncStopPolicy stopPolicy;
 

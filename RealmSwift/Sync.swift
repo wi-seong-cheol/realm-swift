@@ -208,6 +208,8 @@ public typealias Provider = RLMIdentityProvider
 }
 
 public typealias ClientResetMode = RLMClientResetMode
+public typealias BeforeClientResetBlock = RLMClientResetBeforeBlock
+public typealias AfterClientResetBlock = RLMClientResetAfterBlock
 
 /**
  A `SyncConfiguration` represents configuration parameters for Realms intended to sync with
@@ -232,18 +234,8 @@ public typealias ClientResetMode = RLMClientResetMode
 
     // TODO: docs
     public let clientResetMode: ClientResetMode
-    // ???: Shorten names?
-    public func notifyBeforeClientReset(completion: @escaping (_ localRealm: Realm) -> ()) {
-        asConfig().notify { localRlmRealm in
-            completion(Realm(localRlmRealm))
-        }
-    }
-
-    public func notifyAfterClientReset(completion: @escaping (_ localRealm: Realm, _ remoteRealm: Realm) -> ()) {
-        asConfig().notify { localRlmRealm, remoteRlmRealm in
-            completion(Realm(localRlmRealm), Realm(remoteRlmRealm))
-        }
-    }
+    public var notifyBeforeClientReset: BeforeClientResetBlock?
+    public var noitfyAfterClientReset: AfterClientResetBlock?
 
     /**
      By default, Realm.asyncOpen() swallows non-fatal connection errors such as
@@ -259,13 +251,22 @@ public typealias ClientResetMode = RLMClientResetMode
         self.partitionValue = ObjectiveCSupport.convert(object: config.partitionValue)
         self.cancelAsyncOpenOnNonFatalErrors = config.cancelAsyncOpenOnNonFatalErrors
         self.clientResetMode = config.clientResetMode
+        if ((config.beforeClientReset) != nil) {
+            self.notifyBeforeClientReset = config.beforeClientReset
+        }
+        if ((config.afterClientReset) != nil) {
+            self.noitfyAfterClientReset = config.afterClientReset
+        }
     }
 
     func asConfig() -> RLMSyncConfiguration {
+//        let l = RLMSyncConfiguration(
         let c = RLMSyncConfiguration(user: user,
                                      partitionValue: partitionValue.map(ObjectiveCSupport.convertBson),
                                      stopPolicy: stopPolicy,
-                                     clientResetMode: clientResetMode)
+                                     clientResetMode: clientResetMode,
+                                     notifyBeforeReset: notifyBeforeClientReset,
+                                     notifyAfterReset: noitfyAfterClientReset)
         c.cancelAsyncOpenOnNonFatalErrors = cancelAsyncOpenOnNonFatalErrors
         return c
     }
@@ -401,9 +402,11 @@ public extension User {
     // but the method signature would be ambiguous with
     // func configuration<T: BSON>(partitionValue: T, cancelAsyncOpenOnNonFatalErrors: Bool = false) // Sync.swift : ~416
     // TODO: Docs
-    func configuration<T: BSON>(partitionValue: T, clientResetMode: ClientResetMode) -> Realm.Configuration {
-//        let c = self.__configuration
-        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)), clientResetMode: clientResetMode)
+    func configuration<T: BSON>(partitionValue: T, clientResetMode: ClientResetMode, notifyBeforeReset: BeforeClientResetBlock? = nil, notifyAfterReset: AfterClientResetBlock? = nil) -> Realm.Configuration {
+        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)),
+                                          clientResetMode: clientResetMode,
+                                          notifyBeforeReset: notifyBeforeReset,
+                                          notifyafterReset: notifyAfterReset)
         return ObjectiveCSupport.convert(object: config)
     }
     /**
