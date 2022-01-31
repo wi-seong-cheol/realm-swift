@@ -184,7 +184,11 @@ struct AfterClientResetWrapper : CallbackSchema {
     } else if (self.clientResetMode == RLMClientResetModeManual) {
         @throw RLMException(@"Client reset notifications not supported in Manual mode. Use SyncManager.ErrorHandler");
     } else {
+<<<<<<< HEAD
         _config->notify_after_client_reset = AfterClientResetWrapper{.block = afterClientReset};
+=======
+//        _config->notify_after_client_reset = AfterClientResetWrapper{afterClientReset};
+>>>>>>> 7c1aabe75 (Objective C tests & impl)
     }
 }
 

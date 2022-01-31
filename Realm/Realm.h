@@ -34,7 +34,10 @@
 #import <Realm/RLMRealmConfiguration.h>
 #import <Realm/RLMResults.h>
 #import <Realm/RLMSchema.h>
+#import <Realm/RLMSectionedResults.h>
 #import <Realm/RLMSet.h>
+#import <Realm/RLMResults.h>
+
 #import <Realm/RLMValue.h>
 
 #import <Realm/RLMApp.h>

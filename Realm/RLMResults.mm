@@ -30,6 +30,7 @@
 #import "RLMRealm_Private.hpp"
 #import "RLMRealmConfiguration_Private.hpp"
 #import "RLMSchema_Private.h"
+#import "RLMSectionedResults_Private.hpp"
 #import "RLMThreadSafeReference_Private.hpp"
 #import "RLMUtil.hpp"
 
@@ -503,7 +504,8 @@ static inline void RLMResultsValidateInWriteTransaction(__unsafe_unretained RLMR
 
 - (RLMFastEnumerator *)fastEnumerator {
     return translateRLMResultsErrors([&] {
-        return [[RLMFastEnumerator alloc] initWithResults:_results collection:self
+        return [[RLMFastEnumerator alloc] initWithResults:_results
+                                               collection:self
                                                 classInfo:*_info];
     });
 }
@@ -516,6 +518,14 @@ static inline void RLMResultsValidateInWriteTransaction(__unsafe_unretained RLMR
 
 - (BOOL)isFrozen {
     return _realm.frozen;
+}
+
+- (RLMSectionedResults *)sectionedResultsSortedUsingKeyPath:(NSString *)keyPath
+                                                  ascending:(BOOL)ascending
+                                                   keyBlock:(RLMSectionedResultsKeyBlock)keyBlock {
+    return [[RLMSectionedResults alloc] initWithResults:[self sortedResultsUsingKeyPath:keyPath ascending:ascending]
+                                             objectInfo:*_info
+                                               keyBlock:keyBlock];
 }
 
 - (instancetype)resolveInRealm:(RLMRealm *)realm {

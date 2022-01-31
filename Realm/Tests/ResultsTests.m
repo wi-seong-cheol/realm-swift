@@ -20,11 +20,119 @@
 
 #import <mach/mach.h>
 #import <objc/runtime.h>
+#import "RLMSectionedResults.h"
 
 @interface ResultsTests : RLMTestCase
 @end
 
 @implementation ResultsTests
+
+- (void)testSectionedResults
+{
+    RLMRealm *realm = self.realmWithTestPath;
+    [realm transactionWithBlock:^{
+        [StringObject createInRealm:realm withValue:@[@"bar"]];
+        [StringObject createInRealm:realm withValue:@[@"hey"]];
+        [StringObject createInRealm:realm withValue:@[@"foop"]];
+        [StringObject createInRealm:realm withValue:@[@"h"]];
+        [StringObject createInRealm:realm withValue:@[@"foo"]];
+        [StringObject createInRealm:realm withValue:@[@"hello"]];
+        [StringObject createInRealm:realm withValue:@[@"bur"]];
+    }];
+
+    RLMResults<StringObject *> *results = [StringObject allObjectsInRealm:realm];
+
+
+
+    RLMSectionedResults<StringObject *> *sectionedResults =     [results sectionedResultsSortedUsingKeyPath:@"stringCol"
+                                                                                                  ascending:NO
+                                                                                            keyBlock:^id<RLMValue>(StringObject *o) {
+                                                                    return [o.stringCol substringToIndex:1];
+                                                                }];
+
+    id token = [sectionedResults addNotificationBlock:^(RLMSectionedResults * _Nonnull r,
+                                                        RLMSectionedResultsChange * _Nonnull c,
+                                                        NSError * _Nonnull e) {
+        NSLog(@"Insertions %@", c.insertions);
+        NSLog(@"Modiciations %@", c.modifications);
+        NSLog(@"Deletions %@", c.deletions);
+    }];
+
+    for (RLMSection *s in sectionedResults) {
+        NSLog(@"%@", s.key);
+        for (StringObject *o in s) {
+            NSLog(@"%@", o.stringCol);
+        }
+    }
+
+    [realm transactionWithBlock:^{
+        [realm deleteAllObjects];
+    }];
+
+    [realm transactionWithBlock:^{
+        [StringObject createInRealm:realm withValue:@[@"bar"]];
+        [StringObject createInRealm:realm withValue:@[@"hey"]];
+        [StringObject createInRealm:realm withValue:@[@"foop"]];
+        [StringObject createInRealm:realm withValue:@[@"h"]];
+        [StringObject createInRealm:realm withValue:@[@"foo"]];
+        [StringObject createInRealm:realm withValue:@[@"hello"]];
+        [StringObject createInRealm:realm withValue:@[@"bur"]];
+    }];
+
+    for (RLMSection *s in sectionedResults) {
+        NSLog(@"%@", s.key);
+        for (StringObject *o in s) {
+            NSLog(@"%@", o.stringCol);
+        }
+    }
+
+    for (StringObject *o in sectionedResults[0]) {
+        NSLog(@"%@", o.stringCol);
+    }
+
+    for (size_t i = 0; i < sectionedResults.count; i++) {
+        RLMSection<StringObject *> *section = sectionedResults[i];
+        NSLog(@"Key: %@", section.key);
+        for (size_t y = 0; y < section.count; y++) {
+            NSLog(@"%@", section[y].stringCol);
+        }
+    }
+
+    [realm transactionWithBlock:^{
+        [StringObject createInRealm:realm withValue:@[@"jane"]];
+        [StringObject createInRealm:realm withValue:@[@"shaggy"]];
+        [StringObject createInRealm:realm withValue:@[@"jan"]];
+        [StringObject createInRealm:realm withValue:@[@"scooby"]];
+        [StringObject createInRealm:realm withValue:@[@"apple"]];
+        [StringObject createInRealm:realm withValue:@[@"any"]];
+        [StringObject createInRealm:realm withValue:@[@"macbook"]];
+    }];
+
+    [realm transactionWithBlock:^{
+    }];
+
+    [realm transactionWithBlock:^{
+        [StringObject createInRealm:realm withValue:@[@"jane"]];
+    }];
+
+    [realm transactionWithBlock:^{
+        [StringObject createInRealm:realm withValue:@[@"jane"]];
+        [StringObject createInRealm:realm withValue:@[@"jane"]];
+    }];
+
+    [realm transactionWithBlock:^{
+    }];
+
+    for (size_t i = 0; i < sectionedResults.count; i++) {
+        RLMSection<StringObject *> *section = sectionedResults[i];
+        NSLog(@"Key: %@", [section[0].stringCol substringToIndex:1]);
+        for (size_t y = 0; y < section.count; y++) {
+            NSLog(@"%@", section[y].stringCol);
+        }
+    }
+
+    token = nil;
+}
 
 - (void)testFastEnumeration
 {
