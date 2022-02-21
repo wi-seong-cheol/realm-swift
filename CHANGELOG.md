@@ -22,7 +22,7 @@ x.y.z Release notes (yyyy-MM-dd)
   be invoked with `User.delete()`/`[RLMUser deleteWithCompletion:]`.
 
 ### Fixed
-* Copy EmbeddedObject for embedded object property on initializing unmanaged object ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
+* Copying an embedded object to an unmanaged object will not throw ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
 * Add support of arm64 in Carthage build ([#7154](https://github.com/realm/realm-cocoa/issues/7154)
 * Adding missing support for `IN` queries to primitives types on Type Safe Queries.
   ```swift
