@@ -38,48 +38,48 @@ using namespace realm;
 #pragma mark CocoaNetworkTransport
 namespace {
     /// Internal transport struct to bridge RLMNetworkingTransporting to the GenericNetworkTransport.
-    class CocoaNetworkTransport : public realm::app::GenericNetworkTransport {
-    public:
-        CocoaNetworkTransport(id<RLMNetworkTransport> transport) : m_transport(transport) {};
-
-        void send_request_to_server(const app::Request request,
-                                    std::function<void(const app::Response)> completion) override {
-            // Convert the app::Request to an RLMRequest
-            auto rlmRequest = [RLMRequest new];
-            rlmRequest.url = @(request.url.data());
-            rlmRequest.body = @(request.body.data());
-            NSMutableDictionary *headers = [NSMutableDictionary new];
-            for (auto header : request.headers) {
-                headers[@(header.first.data())] = @(header.second.data());
-            }
-            rlmRequest.headers = headers;
-            rlmRequest.method = static_cast<RLMHTTPMethod>(request.method);
-            rlmRequest.timeout = request.timeout_ms / 1000;
-
-            // Send the request through to the Cocoa level transport
-            [m_transport sendRequestToServer:rlmRequest completion:^(RLMResponse *response) {
-                __block std::map<std::string, std::string> bridgingHeaders;
-                [response.headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *) {
-                    bridgingHeaders[key.UTF8String] = value.UTF8String;
-                }];
-
-                // Convert the RLMResponse to an app:Response and pass downstream to
-                // the object store
-                completion(app::Response{
-                    .http_status_code = static_cast<int>(response.httpStatusCode),
-                    .custom_status_code = static_cast<int>(response.customStatusCode),
-                    .headers = bridgingHeaders,
-                    .body = response.body ? response.body.UTF8String : ""
-                });
-            }];
-        }
-
-        id<RLMNetworkTransport> transport() const {
-            return m_transport;
-        }
-    private:
-        id<RLMNetworkTransport> m_transport;
-    };
+//    class CocoaNetworkTransport : public realm::app::GenericNetworkTransport {
+//    public:
+//        CocoaNetworkTransport(id<RLMNetworkTransport> transport) : m_transport(transport) {};
+//
+//        void send_request_to_server(const app::Request request,
+//                                    std::function<void(const app::Response)> completion) override {
+//            // Convert the app::Request to an RLMRequest
+//            auto rlmRequest = [RLMRequest new];
+//            rlmRequest.url = @(request.url.data());
+//            rlmRequest.body = @(request.body.data());
+//            NSMutableDictionary *headers = [NSMutableDictionary new];
+//            for (auto header : request.headers) {
+//                headers[@(header.first.data())] = @(header.second.data());
+//            }
+//            rlmRequest.headers = headers;
+//            rlmRequest.method = static_cast<RLMHTTPMethod>(request.method);
+//            rlmRequest.timeout = request.timeout_ms / 1000;
+//
+//            // Send the request through to the Cocoa level transport
+//            [m_transport sendRequestToServer:rlmRequest completion:^(RLMResponse *response) {
+//                __block std::map<std::string, std::string> bridgingHeaders;
+//                [response.headers enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *value, BOOL *) {
+//                    bridgingHeaders[key.UTF8String] = value.UTF8String;
+//                }];
+//
+//                // Convert the RLMResponse to an app:Response and pass downstream to
+//                // the object store
+//                completion(app::Response{
+//                    .http_status_code = static_cast<int>(response.httpStatusCode),
+//                    .custom_status_code = static_cast<int>(response.customStatusCode),
+//                    .headers = bridgingHeaders,
+//                    .body = response.body ? response.body.UTF8String : ""
+//                });
+//            }];
+//        }
+//
+//        id<RLMNetworkTransport> transport() const {
+//            return m_transport;
+//        }
+//    private:
+//        id<RLMNetworkTransport> m_transport;
+//    };
 }
 
 #pragma mark RLMAppConfiguration
@@ -152,14 +152,14 @@ namespace {
 }
 
 - (id<RLMNetworkTransport>)transport {
-    return static_cast<CocoaNetworkTransport&>(*_config.transport).transport();
+    return nil; //static_cast<CocoaNetworkTransport&>(*_config.transport).transport();
 }
 
 - (void)setTransport:(id<RLMNetworkTransport>)transport {
     if (!transport) {
         transport = [RLMNetworkTransport new];
     }
-    _config.transport = std::make_shared<CocoaNetworkTransport>(transport);
+   // _config.transport = std::make_shared<CocoaNetworkTransport>(transport);
 }
 
 - (NSString *)localAppName {
