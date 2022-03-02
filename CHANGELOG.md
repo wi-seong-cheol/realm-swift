@@ -5,8 +5,7 @@ x.y.z Release notes (yyyy-MM-dd)
   to filter results using the `where` parameter.
 
 ### Fixed
-* <How to hit and notice issue? what was the impact?> ([#????](https://github.com/realm/realm-swift/issues/????), since v?.?.?)
-* None.
+* Copying an embedded object to an unmanaged object will not throw ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
 
 <!-- ### Breaking Changes - ONLY INCLUDE FOR NEW MAJOR version -->
 
@@ -48,7 +47,6 @@ x.y.z Release notes (yyyy-MM-dd)
 * Add Xcode 13.3 binaries to the release package (and remove 13.0).
 
 ### Fixed
-* Copying an embedded object to an unmanaged object will not throw ([#6921](https://github.com/realm/realm-cocoa/issues/6921)
 
 * Add support of arm64 in Carthage build ([#7154](https://github.com/realm/realm-cocoa/issues/7154)
 * Adding missing support for `IN` queries to primitives types on Type Safe Queries.
