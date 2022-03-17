@@ -128,7 +128,7 @@ let package = Package(
             targets: ["Realm", "RealmSwift"]),
     ],
     dependencies: [
-        .package(name: "RealmDatabase", url: "https://github.com/realm/realm-core", .exact(Version(coreVersionStr)!))
+        .package(name: "RealmDatabase", url: "https://github.com/realm/realm-core", .branch("dp/watchos_simulator_old_architecture_target_not_thread_local"))
     ],
     targets: [
       .target(
