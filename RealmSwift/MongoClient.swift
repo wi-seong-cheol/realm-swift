@@ -74,6 +74,16 @@ extension FindOptions {
         }
     }
 
+    /// The order in which to return matching documents.
+    public var sortDescriptor: [SortDescriptor] {
+        get {
+            __sortDescriptor.map { SortDescriptor(keyPath: $0.keyPath, ascending: $0.ascending) }
+        }
+        set {
+            __sortDescriptor = newValue.compactMap { RLMSortDescriptor(keyPath: $0.keyPath, ascending: $0.ascending) }
+        }
+    }
+
     /// Options to use when executing a `find` command on a `MongoCollection`.
     /// - Parameters:
     ///   - limit: The maximum number of documents to return. Specifying 0 will return all documents.
@@ -91,7 +101,19 @@ extension FindOptions {
     ///   - limit: The maximum number of documents to return. Specifying 0 will return all documents.
     ///   - projected: Limits the fields to return for all matching documents.
     ///   - sort: The order in which to return matching documents.
-    public convenience init(limit: Int?, projection: Document?, sort: Document?) {
+    public convenience init(_ limit: Int?, _ projection: Document?, _ sortDescriptor: [SortDescriptor] = []) {
+        self.init()
+        self.limit = limit ?? 0
+        self.projection = projection
+        self.sortDescriptor = sortDescriptor
+    }
+
+    /// Options to use when executing a `find` command on a `MongoCollection`.
+    /// - Parameters:
+    ///   - limit: The maximum number of documents to return. Specifying 0 will return all documents.
+    ///   - projected: Limits the fields to return for all matching documents.
+    ///   - sort: The order in which to return matching documents.
+    public convenience init(limit: Int?, projection: Document?, sort: [SortDescriptor] = []) {
         self.init(limit, projection, sort)
     }
 }
@@ -123,6 +145,16 @@ extension FindOneAndModifyOptions {
         }
     }
 
+    /// The order in which to return matching documents.
+    public var sortDescriptor: [SortDescriptor] {
+        get {
+            __sortDescriptor.map { SortDescriptor(keyPath: $0.keyPath, ascending: $0.ascending) }
+        }
+        set {
+            __sortDescriptor = newValue.compactMap { RLMSortDescriptor(keyPath: $0.keyPath, ascending: $0.ascending) }
+        }
+    }
+
     /// Options to use when executing a `findOneAndUpdate`, `findOneAndReplace`,
     /// or `findOneAndDelete` command on a `MongoCollection`
     /// - Parameters:
@@ -140,6 +172,27 @@ extension FindOneAndModifyOptions {
         self.init()
         self.projection = projection
         self.sort = sort
+        self.upsert = upsert
+        self.shouldReturnNewDocument = shouldReturnNewDocument
+    }
+
+    /// Options to use when executing a `findOneAndUpdate`, `findOneAndReplace`,
+    /// or `findOneAndDelete` command on a `MongoCollection`
+    /// - Parameters:
+    ///   - projection: Limits the fields to return for all matching documents.
+    ///   - sort: The order in which to return matching documents.
+    ///   - upsert: Whether or not to perform an upsert, default is false
+    ///   (only available for findOneAndReplace and findOneAndUpdate)
+    ///   - shouldReturnNewDocument: When true then the new document is returned,
+    ///   Otherwise the old document is returned (default)
+    ///   (only available for findOneAndReplace and findOneAndUpdate)
+    public convenience init(_ projection: Document?,
+                            _ sortDescriptor: [SortDescriptor] = [],
+                            _ upsert: Bool=false,
+                            _ shouldReturnNewDocument: Bool=false) {
+        self.init()
+        self.projection = projection
+        self.sortDescriptor = sortDescriptor
         self.upsert = upsert
         self.shouldReturnNewDocument = shouldReturnNewDocument
     }

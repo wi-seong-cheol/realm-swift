@@ -19,6 +19,9 @@
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
+
+@class RLMSortDescriptor;
+
 @protocol RLMBSON;
 
 /// Options to use when executing a `findOneAndUpdate`, `findOneAndReplace`,
@@ -30,6 +33,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// The order in which to return matching documents.
 @property (nonatomic, nullable) id<RLMBSON> sort NS_REFINED_FOR_SWIFT;
+
+/// The order in which to return matching documents.
+@property (nonatomic) NSArray<RLMSortDescriptor *>* sortDescriptor NS_REFINED_FOR_SWIFT;
 
 /// Whether or not to perform an upsert, default is false
 /// (only available for find_one_and_replace and find_one_and_update)
@@ -53,6 +59,11 @@ NS_ASSUME_NONNULL_BEGIN
                               sort:(id<RLMBSON> _Nullable)sort
                             upsert:(BOOL)upsert
            shouldReturnNewDocument:(BOOL)shouldReturnNewDocument NS_SWIFT_UNAVAILABLE("Please see FindOneAndModifyOptions");
+
+- (instancetype)initWithProjection:(id<RLMBSON> _Nullable)projection
+                    sortDescriptor:(NSArray<RLMSortDescriptor *> *)sort
+                            upsert:(BOOL)upsert
+           shouldReturnNewDocument:(BOOL)shouldReturnNewDocument;
 
 @end
 

@@ -84,6 +84,27 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         XCTAssertTrue(findModifyOptions.shouldReturnNewDocument)
     }
 
+    func testMongoOptionsWithSortDescriptor() {
+        let findOptions = FindOptions(1, nil, nil)
+        let findOptions1 = FindOptions(5, ["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)])
+        let findOptions2 = FindOptions(5, ["names": ["fido", "bob", "rex"]], [SortDescriptor(keyPath: "_id", ascending: true)])
+
+        XCTAssertEqual(findOptions.limit, 1)
+        XCTAssertEqual(findOptions.projection, nil)
+        XCTAssertEqual(findOptions.sort, nil)
+
+        XCTAssertEqual(findOptions1.limit, 5)
+        XCTAssertEqual(findOptions1.projection, ["name": 1])
+        XCTAssertEqual(findOptions1.sortDescriptor, [SortDescriptor(keyPath: "_id", ascending: true)])
+        XCTAssertEqual(findOptions2.projection, ["names": ["fido", "bob", "rex"]])
+
+        let findModifyOptions = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
+        XCTAssertEqual(findModifyOptions.projection, ["name": 1])
+        XCTAssertEqual(findModifyOptions.sortDescriptor, [SortDescriptor(keyPath: "_id", ascending: true)])
+        XCTAssertTrue(findModifyOptions.upsert)
+        XCTAssertTrue(findModifyOptions.shouldReturnNewDocument)
+    }
+
     func testMongoInsertResultCompletion() {
         let collection = setupMongoCollection()
         let document: Document = ["name": "fido", "breed": "cane corso"]
@@ -230,7 +251,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneReplaceEx1], timeout: 4.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
         let findOneReplaceEx2 = expectation(description: "Find one document and replace")
         collection.findOneAndReplace(filter: document2, replacement: document3, options: options1) { result in
             switch result {
@@ -243,7 +264,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneReplaceEx2], timeout: 4.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, false)
         let findOneReplaceEx3 = expectation(description: "Find one document and replace")
         collection.findOneAndReplace(filter: document, replacement: document2, options: options2) { result in
             switch result {
@@ -277,7 +298,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneUpdateEx1], timeout: 4.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
         let findOneUpdateEx2 = expectation(description: "Find one document and update")
         collection.findOneAndUpdate(filter: document2, update: document3, options: options1) { result in
             switch result {
@@ -291,7 +312,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneUpdateEx2], timeout: 4.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
         let findOneUpdateEx3 = expectation(description: "Find one document and update")
         collection.findOneAndUpdate(filter: document, update: document2, options: options2) { result in
             switch result {
@@ -335,7 +356,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneDeleteEx1], timeout: 4.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], false, false)
+        let options1 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], false, false)
         let findOneDeleteEx2 = expectation(description: "Find one document and delete")
         collection.findOneAndDelete(filter: document, options: options1) { result in
             switch result {
@@ -349,7 +370,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneDeleteEx2], timeout: 4.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1])
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)])
         let findOneDeleteEx3 = expectation(description: "Find one document and delete")
         collection.findOneAndDelete(filter: document, options: options2) { result in
             switch result {
@@ -893,6 +914,43 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         return collection
     }
 
+    func testMongoFindSortOptions() async throws {
+        let collection = try await setupMongoCollection()
+
+        let document: Document = ["name": "fido", "breed": "cane corso"]
+        let document2: Document = ["name": "rex", "breed": "tibetan mastiff"]
+        let document3: Document = ["name": "rex", "breed": "cane corso"]
+        let document4: Document = ["name": "rex", "breed": "cane corso"]
+
+        let objectIds = try await collection.insertMany([document, document2, document3, document4])
+        XCTAssertNotNil(objectIds)
+        XCTAssertEqual(objectIds.count, 4)
+
+        let findOptions = FindOptions(0, nil, [SortDescriptor(keyPath: "name", ascending: true), SortDescriptor(keyPath: "breed", ascending: false)])
+        let fetchedDocuments = try await collection.find(filter: [:], options: findOptions)
+        XCTAssertEqual(fetchedDocuments.count, 4)
+        XCTAssertEqual(fetchedDocuments[0]["name"]??.stringValue, "fido")
+        XCTAssertEqual(fetchedDocuments[1]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments[1]["breed"]??.stringValue, "tibetan mastiff")
+        XCTAssertEqual(fetchedDocuments[2]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments[2]["breed"]??.stringValue, "cane corso")
+        XCTAssertEqual(fetchedDocuments[3]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments[3]["breed"]??.stringValue, "cane corso")
+
+        for try _ in 0...10 {
+            let findOptions2 = FindOptions(0, nil, [SortDescriptor(keyPath: "name", ascending: true), SortDescriptor(keyPath: "breed", ascending: false)])
+            let fetchedDocuments2 = try await collection.find(filter: [:], options: findOptions2)
+            XCTAssertEqual(fetchedDocuments[0]["name"], fetchedDocuments2[0]["name"])
+            XCTAssertEqual(fetchedDocuments[0]["breed"], fetchedDocuments2[0]["breed"])
+            XCTAssertEqual(fetchedDocuments[1]["name"], fetchedDocuments2[1]["name"])
+            XCTAssertEqual(fetchedDocuments[1]["breed"], fetchedDocuments2[1]["breed"])
+            XCTAssertEqual(fetchedDocuments[2]["name"], fetchedDocuments2[2]["name"])
+            XCTAssertEqual(fetchedDocuments[2]["breed"], fetchedDocuments2[2]["breed"])
+            XCTAssertEqual(fetchedDocuments[3]["name"], fetchedDocuments2[3]["name"])
+            XCTAssertEqual(fetchedDocuments[3]["breed"], fetchedDocuments2[3]["breed"])
+        }
+    }
+
     func testMongoCollectionInsertOneAsyncAwait() async throws {
         let collection = try await setupMongoCollection()
 
@@ -998,12 +1056,12 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertNotNil(resultReplacedDocument)
         XCTAssertEqual(resultReplacedDocument?["name"]??.stringValue, "tomas") // shouldReturnNewDocument is false that is why returns old document
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
         let resultReplacedDocument2 = try await collection.findOneAndReplace(filter: document1, replacement: document2, options: options1)
         XCTAssertNotNil(resultReplacedDocument2)
         XCTAssertEqual(resultReplacedDocument2?["name"]??.stringValue, "fito")
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, false)
         let resultReplacedDocument3 = try await collection.findOneAndReplace(filter: document, replacement: document1, options: options2)
         XCTAssertNil(resultReplacedDocument3)
     }
@@ -1027,12 +1085,12 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertNotNil(resultUpdatedDocument)
         XCTAssertEqual(resultUpdatedDocument?["name"]??.stringValue, "tomas") // shouldReturnNewDocument is false that is why returns old document
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, true)
         let resultUpdatedDocument2 = try await collection.findOneAndUpdate(filter: document1, update: document2, options: options1)
         XCTAssertNotNil(resultUpdatedDocument2)
         XCTAssertEqual(resultUpdatedDocument2?["name"]??.stringValue, "fito")
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)], true, false)
         let resultUpdatedDocument3 = try await collection.findOneAndUpdate(filter: document, update: document1, options: options2)
         XCTAssertNil(resultUpdatedDocument3)
     }
@@ -1055,7 +1113,7 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertEqual(deletedDocument?["name"]??.stringValue, "tomas")
 
         // Document already deleted, should return nil
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1])
+        let options2 = FindOneAndModifyOptions(["name": 1], [SortDescriptor(keyPath: "_id", ascending: true)])
         let deletedDocument3 = try await collection.findOneAndDelete(filter: document, options: options2)
         XCTAssertNil(deletedDocument3)
 

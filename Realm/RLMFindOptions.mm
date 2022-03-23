@@ -18,6 +18,7 @@
 
 #import "RLMFindOptions_Private.hpp"
 #import "RLMBSON_Private.hpp"
+#import "RLMCollection.h"
 
 @interface RLMFindOptions() {
     realm::app::MongoCollection::FindOptions _options;
@@ -46,6 +47,26 @@
     return self;
 }
 
+- (instancetype)initWithLimit:(NSInteger)limit
+                   projection:(id<RLMBSON> _Nullable)projection
+               sortDescriptor:(NSArray<RLMSortDescriptor *> *)sortDescriptor {
+    if (self = [super init]) {
+        self.projection = projection;
+        self.sortDescriptor = sortDescriptor;
+        self.limit = limit;
+    }
+    return self;
+}
+
+- (instancetype)initWithProjection:(id<RLMBSON> _Nullable)projection
+                    sortDescriptor:(NSArray<RLMSortDescriptor *> *)sortDescriptor {
+    if (self = [super init]) {
+        self.projection = projection;
+        self.sortDescriptor = sortDescriptor;
+    }
+    return self;
+}
+
 - (realm::app::MongoCollection::FindOptions)_findOptions {
     return _options;
 }
@@ -56,6 +77,17 @@
 
 - (id<RLMBSON>)sort {
     return RLMConvertBsonDocumentToRLMBSON(_options.sort_bson);
+}
+
+- (NSArray<RLMSortDescriptor *> *)sortDescriptor {
+    id<RLMBSON> rlmBson = RLMConvertBsonDocumentToRLMBSON(_options.sort_bson);
+    NSDictionary *bsonDictionary = (NSDictionary<NSString*, NSNumber *> *)rlmBson;
+    NSMutableArray<RLMSortDescriptor *> *sortDescriptors = [[NSMutableArray alloc] init];
+    [bsonDictionary enumerateKeysAndObjectsUsingBlock:^(NSString* key, NSNumber* value, BOOL* stop) {
+        BOOL isAscending = value == [[NSNumber alloc]initWithInteger: 1] ? TRUE : FALSE;
+        [sortDescriptors addObject:[RLMSortDescriptor sortDescriptorWithKeyPath:key ascending:isAscending]];
+    }];
+    return sortDescriptors;
 }
 
 - (void)setProjection:(id<RLMBSON>)projection {
@@ -70,6 +102,19 @@
 - (void)setSort:(id<RLMBSON>)sort {
     if (sort) {
         auto bson = realm::bson::BsonDocument(RLMConvertRLMBSONToBson(sort));
+        _options.sort_bson = realm::util::Optional<realm::bson::BsonDocument>(bson);
+    } else {
+        _options.sort_bson = realm::util::none;
+    }
+}
+
+- (void)setSortDescriptor:(NSArray<RLMSortDescriptor *> *)sort {
+    if (sort) {
+        NSMutableDictionary<NSString *, id<RLMBSON>> *dictionary = [[NSMutableDictionary alloc] init];
+        [sort enumerateObjectsUsingBlock:^(RLMSortDescriptor *obj, NSUInteger idx, BOOL *stop) {
+            [dictionary setObject:obj.ascending == TRUE ? [[NSNumber alloc]initWithInteger:1] :  [[NSNumber alloc]initWithInteger:-1] forKey:obj.keyPath];
+        }];
+        auto bson = realm::bson::BsonDocument(RLMConvertRLMBSONToBson(dictionary));
         _options.sort_bson = realm::util::Optional<realm::bson::BsonDocument>(bson);
     } else {
         _options.sort_bson = realm::util::none;
