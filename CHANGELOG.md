@@ -10,6 +10,8 @@ x.y.z Release notes (yyyy-MM-dd)
 * The `intialSubscriptions` callback was invoked every time a Realm was opened
   regardless of the value of `rerunOnOpen` and if the Realm was already open on
   another thread (since v10.28.0).
+* Defer `Realm.asyncOpen` operation on `@AsyncOpen` and `@AutoOpen` property wrappers, 
+  this will guarantee all the environment values are set before opening any realm.
 
 <!-- ### Breaking Changes - ONLY INCLUDE FOR NEW MAJOR version -->
 
