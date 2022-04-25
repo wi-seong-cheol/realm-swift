@@ -1046,6 +1046,77 @@ class SwiftAsyncFlexibleSyncTests: SwiftSyncTestCase {
             }
         }
     }
+
+    @MainActor
+    func testFlexibleSyncAllDocumentsForType() async throws {
+        try await populateFlexibleSyncData { realm in
+            realm.deleteAll() // Remove all objects for a clean state
+            for i in 1...21 {
+                let person = SwiftPerson(firstName: "\(#function)",
+                                         lastName: "lastname_\(i)",
+                                         age: i)
+                realm.add(person)
+            }
+        }
+
+        let realm = try flexibleSyncRealm()
+        XCTAssertNotNil(realm)
+        checkCount(expected: 0, realm, SwiftPerson.self)
+
+        let subscriptions = realm.subscriptions
+        XCTAssertNotNil(subscriptions)
+        XCTAssertEqual(subscriptions.count, 0)
+
+        try await subscriptions.update {
+            subscriptions.append(QuerySubscription<SwiftPerson>(name: "person_age_15"))
+        }
+        XCTAssertEqual(subscriptions.state, .complete)
+
+        waitForDownloads(for: realm)
+        checkCount(expected: 21, realm, SwiftPerson.self)
+    }
+
+    @MainActor
+    func testFlexibleSyncAppUpdateQueryToAllDocuments() async throws {
+        try await populateFlexibleSyncData { realm in
+            for i in 1...21 {
+                realm.deleteAll() // Remove all objects for a clean state
+                let person = SwiftPerson(firstName: "\(#function)",
+                                         lastName: "lastname_\(i)",
+                                         age: i)
+                realm.add(person)
+            }
+        }
+
+        let realm = try flexibleSyncRealm()
+        XCTAssertNotNil(realm)
+        checkCount(expected: 0, realm, SwiftPerson.self)
+
+        let subscriptions = realm.subscriptions
+        XCTAssertNotNil(subscriptions)
+        XCTAssertEqual(subscriptions.count, 0)
+
+        try await subscriptions.update {
+            subscriptions.append(QuerySubscription<SwiftPerson>(name: "person_age_15") {
+                $0.age > 20 && $0.firstName == "\(#function)"
+            })
+        }
+        XCTAssertEqual(subscriptions.state, .complete)
+
+        waitForDownloads(for: realm)
+        checkCount(expected: 1, realm, SwiftPerson.self)
+
+        let foundSubscription = subscriptions.first(named: "person_age")
+        XCTAssertNotNil(foundSubscription)
+
+        try await subscriptions.update {
+            subscriptions.append(QuerySubscription<SwiftPerson>(name: "person_age_15"))
+        }
+        XCTAssertEqual(subscriptions.state, .complete)
+
+        waitForDownloads(for: realm)
+        checkCount(expected: 21, realm, SwiftPerson.self)
+    }
 }
 
 #endif // canImport(_Concurrency)

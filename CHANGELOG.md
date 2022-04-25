@@ -20,6 +20,12 @@ x.y.z Release notes (yyyy-MM-dd)
     [realm cancelAsyncTransaction:asyncTransactionId];
 ```
 * Replace Xcode 13.3 binaries with 13.3.1 binaries.
+* Allow adding a subscription querying for all documents of a type in swift for flexible sync.
+```
+   try await subscriptions.update {
+      subscriptions.append(QuerySubscription<SwiftPerson>(name: "person_age_15"))
+   }
+```
 
 ### Fixed
 * <How to hit and notice issue? what was the impact?> ([#????](https://github.com/realm/realm-swift/issues/????), since v?.?.?)
