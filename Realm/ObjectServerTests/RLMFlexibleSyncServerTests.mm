@@ -996,7 +996,6 @@
 
     __block bool isFirstOpen = true;
     RLMRealmConfiguration *config = [user flexibleSyncConfigurationWithInitialSubscriptions:^(RLMSyncSubscriptionSet *subscriptions) {
-        RLMSyncSubscription *subscription = [subscriptions subscriptionWithName:@"person_age"];
         int age = (isFirstOpen == true) ? 10 : 5;
         [subscriptions addSubscriptionWithClassName:Person.className
                                               where:@"age > %i and partition == %@", age, NSStringFromSelector(_cmd)];
@@ -1043,7 +1042,6 @@
     RLMUser *user = [self logInUserForCredentials:[RLMCredentials anonymousCredentials] app:app];
 
     RLMRealmConfiguration *config = [user flexibleSyncConfigurationWithInitialSubscriptions:^(RLMSyncSubscriptionSet *subscriptions) {
-        RLMSyncSubscription *subscription = [subscriptions subscriptionWithName:@"person_age"];
         [subscriptions addSubscriptionWithClassName:Person.className
                                               where:@"age > 10 and partition == %@", NSStringFromSelector(_cmd)];
     } rerunOnOpen:true];
