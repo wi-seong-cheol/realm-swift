@@ -270,6 +270,14 @@ extension Realm {
         /// If `true`, disables automatic format upgrades when accessing the Realm.
         internal var disableFormatUpgrade: Bool = false
 
+        // MARK: Flexible Sync
+
+        /// Callback for adding subscriptions to the initialisation of the realm
+        internal var initialSubscriptions: ((SyncSubscriptionSet) -> Void)? = nil
+
+        /// If `true` Indicates that the initial subscriptions for this realm ...
+        internal var rerunsOnOpen: Bool = false
+
         // MARK: Private Methods
 
         internal var rlmConfiguration: RLMRealmConfiguration {
@@ -302,6 +310,8 @@ extension Realm {
             configuration.setCustomSchemaWithoutCopying(self.customSchema)
             configuration.disableFormatUpgrade = self.disableFormatUpgrade
             configuration.maximumNumberOfActiveVersions = self.maximumNumberOfActiveVersions ?? 0
+            configuration.initialSubscriptions = ObjectiveCSupport.convert(object: initialSubscriptions)
+            configuration.rerunsOnOpen = rerunsOnOpen
             return configuration
         }
 
@@ -327,6 +337,8 @@ extension Realm {
             configuration.customSchema = rlmConfiguration.customSchema
             configuration.disableFormatUpgrade = rlmConfiguration.disableFormatUpgrade
             configuration.maximumNumberOfActiveVersions = rlmConfiguration.maximumNumberOfActiveVersions
+            configuration.initialSubscriptions = ObjectiveCSupport.convert(object: rlmConfiguration.initialSubscriptions)
+            configuration.rerunsOnOpen = rlmConfiguration.rerunsOnOpen
             return configuration
         }
     }
