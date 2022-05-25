@@ -2700,7 +2700,6 @@ class CombineObjectServerTests: SwiftSyncTestCase {
 }
 
 #if swift(>=5.6) && canImport(_Concurrency)
-
 @available(macOS 12.0, *)
 class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -2721,7 +2720,8 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
             }
         }
         let realm = try await Realm()
-        XCTAssertEqual(realm.objects(SwiftPerson.self).count, 10)
+        let results = try await realm.objects(SwiftPerson.self)
+        XCTAssertEqual(results.count, 10)
     }
 
     @MainActor func testAsyncOpenSync() async throws {
@@ -2736,7 +2736,8 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         let user2 = try await app.login(credentials: .anonymous)
         let realm2 = try await Realm(configuration: user2.configuration(testName: #function),
                                     downloadBeforeOpen: .once)
-        XCTAssertEqual(realm2.objects(SwiftHugeSyncObject.self).count, 2)
+        let results = try await realm2.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results.count, 2)
     }
 
     @MainActor func testAsyncOpenDownloadBehaviorNever() async throws {
@@ -2753,7 +2754,8 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         let user2 = try await app.login(credentials: .anonymous)
         let realm2 = try await Realm(configuration: user2.configuration(testName: #function),
                                     downloadBeforeOpen: .never)
-        XCTAssertEqual(realm2.objects(SwiftHugeSyncObject.self).count, 0)
+        let results = try await realm2.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results.count, 0)
     }
 
     @MainActor func testAsyncOpenDownloadBehaviorOnce() async throws {
@@ -2770,7 +2772,9 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         let user2 = try await app.login(credentials: .anonymous)
         let realm2 = try await Realm(configuration: user2.configuration(testName: #function),
                                      downloadBeforeOpen: .once)
-        XCTAssertEqual(realm2.objects(SwiftHugeSyncObject.self).count, 2)
+
+        let results = try await realm2.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results.count, 2)
         realm2.syncSession?.suspend()
 
         // Add some more objects
@@ -2783,7 +2787,8 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         // Will not wait for the new objects to download
         let realm3 = try await Realm(configuration: user2.configuration(testName: #function),
                                      downloadBeforeOpen: .once)
-        XCTAssertEqual(realm3.objects(SwiftHugeSyncObject.self).count, 2)
+        let results3 = try await realm3.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results3.count, 2)
     }
 
 
@@ -2801,7 +2806,9 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         let user2 = try await app.login(credentials: .anonymous)
         let realm2 = try await Realm(configuration: user2.configuration(testName: #function),
                                      downloadBeforeOpen: .always)
-        XCTAssertEqual(realm2.objects(SwiftHugeSyncObject.self).count, 2)
+
+        let results = try await realm2.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results.count, 2)
         realm2.syncSession?.suspend()
 
         // Add some more objects
@@ -2814,7 +2821,8 @@ class AsyncAwaitObjectServerTests: SwiftSyncTestCase {
         // Should wait for the new objects to download
         let realm3 = try await Realm(configuration: user2.configuration(testName: #function),
                                      downloadBeforeOpen: .always)
-        XCTAssertEqual(realm3.objects(SwiftHugeSyncObject.self).count, 4)
+        let results3 = try await realm3.objects(SwiftHugeSyncObject.self)
+        XCTAssertEqual(results3.count, 4)
     }
 
     func testCallResetPasswordAsyncAwait() async throws {
