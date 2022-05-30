@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0C1C508B2844FC88002E3279 /* Example_v6.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0C1C508A2844FC88002E3279 /* Example_v6.swift */; };
 		0CF50F83272FF6330048A358 /* ProjectionsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF50F82272FF6330048A358 /* ProjectionsApp.swift */; };
 		0CF50F85272FF6330048A358 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0CF50F84272FF6330048A358 /* ContentView.swift */; };
 		0CF50F87272FF6340048A358 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0CF50F86272FF6340048A358 /* Assets.xcassets */; };
@@ -283,6 +284,7 @@
 
 /* Begin PBXFileReference section */
 		0A73D4411B1443A700E1E8EE /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; name = README.md; path = ../../README.md; sourceTree = SOURCE_ROOT; };
+		0C1C508A2844FC88002E3279 /* Example_v6.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Example_v6.swift; sourceTree = "<group>"; };
 		0CF50F80272FF6330048A358 /* Projections.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Projections.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		0CF50F82272FF6330048A358 /* ProjectionsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectionsApp.swift; sourceTree = "<group>"; };
 		0CF50F84272FF6330048A358 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -643,6 +645,7 @@
 				7D46394F25C2E2750089EFD9 /* Example_v3.swift */,
 				7D46399725C45FF00089EFD9 /* Example_v4.swift */,
 				7D46399F25C46C660089EFD9 /* Example_v5.swift */,
+				0C1C508A2844FC88002E3279 /* Example_v6.swift */,
 			);
 			path = Examples;
 			sourceTree = "<group>";
@@ -1376,6 +1379,7 @@
 			files = (
 				E8CB088A19BA6AF70018434A /* AppDelegate.swift in Sources */,
 				7DFFB15E25C19F0700CA8AE5 /* Example_v0.swift in Sources */,
+				0C1C508B2844FC88002E3279 /* Example_v6.swift in Sources */,
 				7DFFB16F25C1B65A00CA8AE5 /* Example_v1.swift in Sources */,
 				7DFFB17725C1B84E00CA8AE5 /* Example_v2.swift in Sources */,
 				7D46395025C2E2750089EFD9 /* Example_v3.swift in Sources */,

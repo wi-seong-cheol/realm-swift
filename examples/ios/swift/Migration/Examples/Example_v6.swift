@@ -1,39 +1,24 @@
-////////////////////////////////////////////////////////////////////////////
 //
-// Copyright 2021 Realm Inc.
+//  Example_v6.swift
+//  Migration
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
+//  Created by Pavel Yakimenko on 30/05/2022.
+//  Copyright © 2022 Realm. All rights reserved.
 //
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-//
-////////////////////////////////////////////////////////////////////////////
 
-#if SCHEMA_VERSION_5
+import Foundation
+
+#if !SCHEMA_VERSION_0 && !SCHEMA_VERSION_1 && !SCHEMA_VERSION_2 && !SCHEMA_VERSION_3 && !SCHEMA_VERSION_4 && !SCHEMA_VERSION_5
 
 import Foundation
 import RealmSwift
 
 // MARK: - Schema
 
-let schemaVersion = 5
+let schemaVersion = 6
 
 // Changes from previous version:
-// - Change the `Address` from `Object` to `EmbeddedObject`.
-//
-// Be aware that this only works if there is only one `LinkingObject` per `Address`.
-// See https://github.com/realm/realm-swift/issues/7060
-
-// Renaming tables is not supported yet: https://github.com/realm/realm-swift/issues/2491
-// The recommended way is to create a new type instead and migrate the old type.
-// Here we create `Pet` and migrate its data from `Dog` so simulate renaming the table.
+// - Add primary key
 
 class Pet: Object {
     enum Kind: Int, PersistableEnum {
@@ -54,6 +39,7 @@ class Pet: Object {
 }
 
 class Person: Object {
+    @Persisted(primaryKey: true) var id: String = UUID().uuidString
     @Persisted var fullName = ""
     @Persisted var age = 0
     @Persisted var address: Address?
@@ -145,6 +131,11 @@ let migrationBlock: MigrationBlock = { migration, oldSchemaVersion in
                 let address = Address(value: ["Broadway", "New York"])
                 newObject!["address"] = address
             }
+        }
+    }
+    if oldSchemaVersion < 5 {
+        migration.enumerateObjects(ofType: Person.className()) { _, newObject in
+            newObject!["id"] = UUID().uuidString
         }
     }
 }
