@@ -65,13 +65,6 @@
     [self createObjects];
     RLMRealm *realm = self.realmWithTestPath;
 
-
-    [realm transactionWithBlock:^{
-        [StringObject createInRealm:realm withValue:@[@"apple"]];
-        [StringObject createInRealm:realm withValue:@[@"any"]];
-        [StringObject createInRealm:realm withValue:@[@"banana"]];
-    }];
-
     RLMResults<AllTypesObject *> *results = [AllTypesObject allObjectsInRealm:realm];
     RLMSectionedResults<AllTypesObject *> *sr = [results sectionedResultsSortedUsingKeyPath:@"objectCol.stringCol"
                                                                                   ascending:YES
@@ -587,8 +580,15 @@ static void ExpectChange(id self,
     XCTAssertEqualObjects(insertions, changes.insertions);
     XCTAssertEqualObjects(deletions, changes.deletions);
     XCTAssertEqualObjects(modifications, changes.modifications);
-    XCTAssertEqualObjects(sectionsToInsert, changes.sectionsToInsert);
-    XCTAssertEqualObjects(sectionsToRemove, changes.sectionsToRemove);
+    XCTAssertEqual(sectionsToInsert.count, changes.sectionsToInsert.count);
+    XCTAssertEqual(sectionsToRemove.count, changes.sectionsToRemove.count);
+
+    for (NSNumber *i in sectionsToInsert) {
+        XCTAssertTrue([changes.sectionsToInsert containsIndex:i.unsignedIntegerValue]);
+    }
+    for (NSNumber *i in sectionsToRemove) {
+        XCTAssertTrue([changes.sectionsToRemove containsIndex:i.unsignedIntegerValue]);
+    }
 }
 
 - (void)testNotifications {
@@ -692,7 +692,6 @@ static void ExpectChange(id self,
 }
 
 - (void)testNotificationsOnSection {
-
     __block RLMSectionedResultsChange *changes;
     RLMRealm *realm = self.realmWithTestPath;
     [self createObjects];
@@ -725,8 +724,8 @@ static void ExpectChange(id self,
     XCTAssertEqualObjects(changes.insertions, @[[NSIndexPath indexPathForItem:0 inSection:0]]);
     XCTAssertEqualObjects(changes.modifications, @[]);
     XCTAssertEqualObjects(changes.deletions, @[]);
-    XCTAssertEqualObjects(changes.sectionsToInsert, @[]);
-    XCTAssertEqualObjects(changes.sectionsToRemove, @[]);
+    XCTAssertEqual(changes.sectionsToInsert.count, 0);
+    XCTAssertEqual(changes.sectionsToRemove.count, 0);
 
     [self waitForNotification:RLMRealmDidChangeNotification realm:self.realmWithTestPath block:^{
         RLMRealm *r = self.realmWithTestPath;
@@ -739,8 +738,8 @@ static void ExpectChange(id self,
     XCTAssertEqualObjects(changes.insertions, @[]);
     XCTAssertEqualObjects(changes.modifications, @[]);
     XCTAssertEqualObjects(changes.deletions, @[]);
-    XCTAssertEqualObjects(changes.sectionsToInsert, @[]);
-    XCTAssertEqualObjects(changes.sectionsToRemove, @[@0]);
+    XCTAssertEqual(changes.sectionsToInsert.count, 0);
+    XCTAssertTrue([changes.sectionsToRemove containsIndex:0]);
 }
 
 static RLMSectionedResultsChange *getChangePrimitive(SectionedResultsTests *self, void (^block)(RLMRealm *)) {
@@ -794,8 +793,15 @@ static void ExpectChangePrimitive(id self,
     XCTAssertEqualObjects(insertions, changes.insertions);
     XCTAssertEqualObjects(deletions, changes.deletions);
     XCTAssertEqualObjects(modifications, changes.modifications);
-    XCTAssertEqualObjects(sectionsToInsert, changes.sectionsToInsert);
-    XCTAssertEqualObjects(sectionsToRemove, changes.sectionsToRemove);
+    XCTAssertEqual(sectionsToInsert.count, changes.sectionsToInsert.count);
+    XCTAssertEqual(sectionsToRemove.count, changes.sectionsToRemove.count);
+
+    for (NSNumber *i in sectionsToInsert) {
+        XCTAssertTrue([changes.sectionsToInsert containsIndex:i.unsignedIntegerValue]);
+    }
+    for (NSNumber *i in sectionsToRemove) {
+        XCTAssertTrue([changes.sectionsToRemove containsIndex:i.unsignedIntegerValue]);
+    }
 }
 
 - (void)testNotificationsPrimitive {
@@ -842,37 +848,175 @@ static void ExpectChangePrimitive(id self,
 }
 
 - (void)testSortDescriptors {
+    RLMRealm *realm = self.realmWithTestPath;
+    [realm transactionWithBlock:^{
+        AggregateArrayObject *o1 = [AggregateArrayObject new];
+        AggregateSetObject *o2 = [AggregateSetObject new];
+        AggregateObject *aggObj1 = [AggregateObject new];
+        aggObj1.intCol = 1;
+        aggObj1.anyCol = @9;
 
-}
+        AggregateObject *aggObj2 = [AggregateObject new];
+        aggObj2.intCol = 1;
+        aggObj2.anyCol = @10;
 
-- (void)testDescending {
+        AggregateObject *aggObj3 = [AggregateObject new];
+        aggObj3.intCol = 1;
+        aggObj3.anyCol = @2;
 
+        AggregateObject *aggObj4 = [AggregateObject new];
+        aggObj4.intCol = 2;
+        aggObj4.anyCol = @1;
+
+        [o1.array addObjects:@[aggObj1, aggObj2, aggObj3, aggObj4]];
+        [o2.set addObjects:@[aggObj1, aggObj2, aggObj3, aggObj4]];
+
+        [realm addObjects:@[o1, o2]];
+    }];
+
+    NSMutableArray *sortDescriptors = [NSMutableArray new];
+    [sortDescriptors addObject:[RLMSortDescriptor sortDescriptorWithKeyPath:@"intCol" ascending:YES]];
+    [sortDescriptors addObject:[RLMSortDescriptor sortDescriptorWithKeyPath:@"anyCol" ascending:NO]];
+
+    AggregateArrayObject *arrayObj = [AggregateArrayObject allObjectsInRealm:realm][0];
+    AggregateSetObject *setObj = [AggregateSetObject allObjectsInRealm:realm][0];
+
+    void(^run)(id<RLMCollection> collection) = ^(id<RLMCollection> collection) {
+        RLMSectionedResults<AggregateObject *> *sr = [collection sectionedResultsUsingSortDescriptors:sortDescriptors
+                                                                                             keyBlock:^id<RLMValue>(AggregateObject *value) {
+            return @(value.intCol);
+        }];
+
+        XCTAssertNotNil(sr);
+        XCTAssertEqual(sr.count, 2);
+        XCTAssertEqual(sr[0].count, 3);
+        XCTAssertEqual(sr[1].count, 1);
+        XCTAssertEqualObjects(sr[0].key, @1);
+        XCTAssertEqual(sr[0][0].intCol, 1);
+        XCTAssertEqualObjects(sr[0][0].anyCol, @10);
+        XCTAssertEqual(sr[0][1].intCol, 1);
+        XCTAssertEqualObjects(sr[0][1].anyCol, @9);
+        XCTAssertEqualObjects(sr[1].key, @2);
+        XCTAssertEqual(sr[1][0].intCol, 2);
+        XCTAssertEqualObjects(sr[1][0].anyCol, @1);
+    };
+
+    run(arrayObj.array);
+    run(setObj.set);
+    run([AggregateObject allObjectsInRealm:realm]);
 }
 
 - (void)testFrozen {
+    [self createObjects];
+    RLMRealm *realm = self.realmWithTestPath;
 
-}
+    RLMResults<AllTypesObject *> *results = [[AllTypesObject allObjectsInRealm:realm] freeze];
+    RLMSectionedResults<AllTypesObject *> *sr = [results sectionedResultsSortedUsingKeyPath:@"objectCol.stringCol"
+                                                                                  ascending:YES
+                                                                                   keyBlock:^id<RLMValue>(AllTypesObject *value) {
+        return [value.objectCol.stringCol substringToIndex:1];
+    }];
 
-- (void)testHandlesLargeCollection {
+    XCTAssertNotNil(sr);
+    XCTAssertEqual(sr.count, 4);
+    XCTAssertEqual(sr[0].count, 3);
+    XCTAssertEqual(sr[1].count, 1);
+    XCTAssertEqual(sr[2].count, 2);
+    XCTAssertEqual(sr[3].count, 3);
 
+    XCTAssertTrue(sr[0][0].isFrozen);
+    XCTAssertTrue(sr.isFrozen);
 }
 
 - (void)testInitFromRLMArray {
+    RLMRealm *realm = self.realmWithTestPath;
+    [realm transactionWithBlock:^{
+        [MixedObject createInRealm:realm withValue:@[NSNull.null, @[@5, @3, @2, @4]]];
+    }];
 
+    MixedObject *obj = [MixedObject allObjectsInRealm:realm][0];
+    RLMSectionedResults<MixedObject *> *sr = [obj.anyArray sectionedResultsSortedUsingKeyPath:@"self"
+                                                                                    ascending:YES
+                                                                                     keyBlock:^id<RLMValue>(id<RLMValue> value) {
+        return @(((NSNumber *)value).intValue % 2);
+    }];
+
+    XCTAssertNotNil(sr);
+    XCTAssertEqual(sr.count, 2);
+    XCTAssertEqual(sr[0].count, 2);
+    XCTAssertEqual(sr[1].count, 2);
+    XCTAssertEqualObjects(sr[0].key, @0);
+    XCTAssertEqualObjects(sr[0][0], @2);
+    XCTAssertEqualObjects(sr[0][1], @4);
+    XCTAssertEqualObjects(sr[1].key, @1);
+    XCTAssertEqualObjects(sr[1][0], @3);
+    XCTAssertEqualObjects(sr[1][1], @5);
+
+    // Descending
+    sr = [obj.anyArray sectionedResultsSortedUsingKeyPath:@"self"
+                                                ascending:NO
+                                                 keyBlock:^id<RLMValue>(id<RLMValue> value) {
+        return @(((NSNumber *)value).intValue % 2);
+    }];
+
+    XCTAssertNotNil(sr);
+    XCTAssertEqual(sr.count, 2);
+    XCTAssertEqual(sr[0].count, 2);
+    XCTAssertEqual(sr[1].count, 2);
+    XCTAssertEqualObjects(sr[0].key, @1);
+    XCTAssertEqualObjects(sr[0][0], @5);
+    XCTAssertEqualObjects(sr[0][1], @3);
+    XCTAssertEqualObjects(sr[1].key, @0);
+    XCTAssertEqualObjects(sr[1][0], @4);
+    XCTAssertEqualObjects(sr[1][1], @2);
 }
 
 - (void)testInitFromRLMSet {
+    RLMRealm *realm = self.realmWithTestPath;
+    [realm transactionWithBlock:^{
+        AllPrimitiveSets *o = [AllPrimitiveSets new];
+        [o.intObj addObject:@5];
+        [o.intObj addObject:@4];
+        [o.intObj addObject:@1];
+        [o.intObj addObject:@2];
+        [realm addObject:o];
+    }];
 
+    AllPrimitiveSets *obj = [AllPrimitiveSets allObjectsInRealm:realm][0];
+    RLMSectionedResults<AllPrimitiveSets *> *sr = [obj.intObj sectionedResultsSortedUsingKeyPath:@"self"
+                                                                                       ascending:YES
+                                                                                        keyBlock:^id<RLMValue>(id<RLMValue> value) {
+        return @(((NSNumber *)value).intValue % 2);
+    }];
+
+    XCTAssertNotNil(sr);
+    XCTAssertEqual(sr.count, 2);
+    XCTAssertEqual(sr[0].count, 2);
+    XCTAssertEqual(sr[1].count, 2);
+    XCTAssertEqualObjects(sr[0].key, @1);
+    XCTAssertEqualObjects(sr[0][0], @1);
+    XCTAssertEqualObjects(sr[0][1], @5);
+    XCTAssertEqualObjects(sr[1].key, @0);
+    XCTAssertEqualObjects(sr[1][0], @2);
+    XCTAssertEqualObjects(sr[1][1], @4);
+
+    // Descending
+    sr = [obj.intObj sectionedResultsSortedUsingKeyPath:@"self"
+                                              ascending:NO
+                                               keyBlock:^id<RLMValue>(id<RLMValue> value) {
+        return @(((NSNumber *)value).intValue % 2);
+    }];
+
+    XCTAssertNotNil(sr);
+    XCTAssertEqual(sr.count, 2);
+    XCTAssertEqual(sr[0].count, 2);
+    XCTAssertEqual(sr[1].count, 2);
+    XCTAssertEqualObjects(sr[0].key, @1);
+    XCTAssertEqualObjects(sr[0][0], @5);
+    XCTAssertEqualObjects(sr[0][1], @1);
+    XCTAssertEqualObjects(sr[1].key, @0);
+    XCTAssertEqualObjects(sr[1][0], @4);
+    XCTAssertEqualObjects(sr[1][1], @2);
 }
-
-/*
-
- test plan:
-
- add sort descriptors
- large set ~10000 objects - 10000 sections, 10000 in one section
- ascending / decending
- test on frozen results
- */
 
 @end

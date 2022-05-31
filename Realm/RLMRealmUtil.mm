@@ -85,15 +85,11 @@ RLMRealm *RLMGetFrozenRealmForSourceRealm(__unsafe_unretained RLMRealm *const so
                                                                valueOptions:NSPointerFunctionsWeakMemory];
     }
     r.read_group();
-    std::hash<void *> hasher;
     auto version = reinterpret_cast<void *>(r.read_transaction_version().version);
-    // Tag frozen Realm as true as the transaction version alone is not enough to distinguish a unique key.
-    auto key = reinterpret_cast<void *>(hasher(version) + hasher(reinterpret_cast<void *>(true)));
-
-    RLMRealm *realm = [realms objectForKey:(__bridge id)key];
+    RLMRealm *realm = [realms objectForKey:(__bridge id)version];
     if (!realm) {
         realm = [sourceRealm frozenCopy];
-        [realms setObject:realm forKey:(__bridge id)key];
+        [realms setObject:realm forKey:(__bridge id)version];
     }
     return realm;
 }

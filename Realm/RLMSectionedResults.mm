@@ -26,12 +26,6 @@
 #import "RLMResults_Private.hpp"
 #import "RLMThreadSafeReference_Private.hpp"
 
-#if !TARGET_OS_OSX
-#import <UIKit/NSIndexPath+UIKitAdditions.h>
-#else
-#import <AppKit/AppKit.h>
-#endif
-
 #include <map>
 
 namespace {
@@ -122,8 +116,10 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSectionedResults *collection,
 - (NSArray<NSIndexPath *> *)indexesFromIndexMap:(std::map<size_t, realm::IndexSet>&)indexMap {
     NSMutableArray<NSIndexPath *> *a = [NSMutableArray new];
     for (auto& [section_idx, indices] : indexMap) {
+        NSUInteger path[2] = {section_idx, 0};
         for(auto index : indices.as_indexes()) {
-            [a addObject:[NSIndexPath indexPathForItem:index inSection:section_idx]];
+            path[1] = index;
+            [a addObject:[NSIndexPath indexPathWithIndexes:path length:2]];
         }
     }
     return a;
@@ -141,37 +137,37 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSectionedResults *collection,
     return [self indexesFromIndexMap:_indices.modifications];
 }
 
-- (NSArray<NSNumber *> *)sectionsToInsert {
-    NSMutableArray *a = [NSMutableArray arrayWithCapacity:_indices.sections_to_insert.count()];
+- (NSIndexSet *)sectionsToInsert {
+    NSMutableIndexSet *indices = [NSMutableIndexSet new];
     for (auto i : _indices.sections_to_insert.as_indexes()) {
-        [a addObject:@(i)];
+        [indices addIndex:i];
     }
-    return a;
+    return indices;
 }
 
-- (NSArray<NSNumber *> *)sectionsToRemove {
-    NSMutableArray *a = [NSMutableArray arrayWithCapacity:_indices.sections_to_delete.count()];
+- (NSIndexSet *)sectionsToRemove {
+    NSMutableIndexSet *indices = [NSMutableIndexSet new];
     for (auto i : _indices.sections_to_delete.as_indexes()) {
-        [a addObject:@(i)];
+        [indices addIndex:i];
     }
-    return a;
+    return indices;
 }
 
 
 /// Returns the index paths of the deletion indices in the given section.
 - (NSArray<NSIndexPath *> *)deletionsInSection:(NSUInteger)section {
-//    return _indices.deletions[section]
+    return toIndexPathArray(_indices.deletions[section], section);
+
 }
 
 /// Returns the index paths of the insertion indices in the given section.
 - (NSArray<NSIndexPath *> *)insertionsInSection:(NSUInteger)section {
-//    return self.insertions[@(section)];
+    return toIndexPathArray(_indices.insertions[section], section);
 }
 
 /// Returns the index paths of the modification indices in the given section.
 - (NSArray<NSIndexPath *> *)modificationsInSection:(NSUInteger)section {
-//    return self.modifications[@(section)];
-
+    return toIndexPathArray(_indices.modifications[section], section);
 }
 
 - (NSString *)description {
@@ -181,7 +177,7 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSectionedResults *collection,
         BOOL hasItems = NO;
         for (NSIndexPath *i in indexes) {
             hasItems = YES;
-            [s appendFormat:@"\n\t\t[Section: %ld, Index: %ld]", i.section, i.item];
+            [s appendFormat:@"\n\t\t%@", i.description];
         }
         if (hasItems) {
             [s appendString:@"\n\t]"];
@@ -190,18 +186,18 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSectionedResults *collection,
         }
         return s;
     };
-    NSString *(^arrayToString)(NSArray<NSNumber *> *) = ^NSString*(NSArray<NSNumber *> * sections) {
+    NSString *(^indexSetToString)(NSIndexSet *) = ^NSString*(NSIndexSet * sections) {
         NSMutableString *s = [NSMutableString new];
         [s appendString:@"["];
-        BOOL hasRun = NO;
-        for (NSNumber *i in sections) {
+        __block BOOL hasRun = NO;
+        [sections enumerateIndexesUsingBlock:^(NSUInteger i, BOOL *) {
             if (hasRun) {
-                [s appendFormat:@", %@", i];
+                [s appendFormat:@", %lu", (unsigned long)i];
             } else {
-                [s appendFormat:@"%@", i];
+                [s appendFormat:@"%lu", i];
             }
             hasRun = YES;
-        }
+        }];
         [s appendString:@"]"];
         return s;
     };
@@ -210,7 +206,7 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSectionedResults *collection,
             indexPathToString(self.insertions),
             indexPathToString(self.deletions),
             indexPathToString(self.modifications),
-            arrayToString(self.sectionsToInsert), arrayToString(self.sectionsToRemove)];
+            indexSetToString(self.sectionsToInsert), indexSetToString(self.sectionsToRemove)];
 }
 
 @end
@@ -482,6 +478,10 @@ NSUInteger RLMFastEnumerate(NSFastEnumerationState *state,
     return sr;
 }
 
+- (BOOL)isFrozen {
+    return translateRLMResultsErrors([&] { return _sectionedResults.is_frozen(); });
+}
+
 @end
 
 realm::ResultsSection& RLMGetBackingCollection(RLMSection *self) {
@@ -535,7 +535,8 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSection *collection,
     RLMRealm *_realm;
     RLMClassInfo *_info;
     RLMSectionedResultsKeyBlock _keyBlock;
-
+    // Used to keep a reference to the parent RLMSectionedResults if this section if
+    // created on a new thread.
     RLMSectionedResults *_parent;
 }
 
@@ -658,10 +659,6 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSection *collection,
     };
 }
 
-- (id)attachParent:(RLMSectionedResults *)sectionedResults {
-    _parent = sectionedResults;
-}
-
 + (instancetype)objectWithThreadSafeReference:(realm::ThreadSafeReference)reference
                                      metadata:(id)metadata
                                         realm:(RLMRealm *)realm {
@@ -684,7 +681,7 @@ RLMNotificationToken *RLMAddNotificationBlock(RLMSection *collection,
     if (!section) {
         @throw RLMException(@"Could not access section during thread handover.");
     }
-    [section attachParent:sr];
+    section->_parent = sr;
     return section;
 }
 

@@ -477,6 +477,21 @@ static inline void RLMResultsValidateInWriteTransaction(__unsafe_unretained RLMR
     return value ? RLMMixedToObjc(*value) : nil;
 }
 
+- (RLMSectionedResults *)sectionedResultsSortedUsingKeyPath:(NSString *)keyPath
+                                                  ascending:(BOOL)ascending
+                                                   keyBlock:(RLMSectionedResultsKeyBlock)keyBlock {
+    return [[RLMSectionedResults alloc] initWithResults:[self sortedResultsUsingKeyPath:keyPath ascending:ascending]
+                                             objectInfo:*_info
+                                               keyBlock:keyBlock];
+}
+
+- (RLMSectionedResults *)sectionedResultsUsingSortDescriptors:(NSArray<RLMSortDescriptor *> *)properties
+                                                     keyBlock:(RLMSectionedResultsKeyBlock)keyBlock {
+    return [[RLMSectionedResults alloc] initWithResults:[self sortedResultsUsingDescriptors:properties]
+                                             objectInfo:*_info
+                                               keyBlock:keyBlock];
+}
+
 - (void)deleteObjectsFromRealm {
     if (self.type != RLMPropertyTypeObject) {
         @throw RLMException(@"Cannot delete objects from RLMResults<%@>: only RLMObjects can be deleted.",
@@ -518,14 +533,6 @@ static inline void RLMResultsValidateInWriteTransaction(__unsafe_unretained RLMR
 
 - (BOOL)isFrozen {
     return _realm.frozen;
-}
-
-- (RLMSectionedResults *)sectionedResultsSortedUsingKeyPath:(NSString *)keyPath
-                                                  ascending:(BOOL)ascending
-                                                   keyBlock:(RLMSectionedResultsKeyBlock)keyBlock {
-    return [[RLMSectionedResults alloc] initWithResults:[self sortedResultsUsingKeyPath:keyPath ascending:ascending]
-                                             objectInfo:*_info
-                                               keyBlock:keyBlock];
 }
 
 - (instancetype)resolveInRealm:(RLMRealm *)realm {

@@ -29,8 +29,6 @@
 #import "RLMSet_Private.hpp"
 #import "RLMSwiftCollectionBase.h"
 
-#import "RLMSectionedResults_Private.hpp"
-
 #import <realm/object-store/dictionary.hpp>
 #import <realm/object-store/list.hpp>
 #import <realm/object-store/results.hpp>
@@ -132,56 +130,6 @@ static const int RLMEnumerationBufferSize = 16;
     _collection = nil;
 }
 
-- (NSUInteger)sectionCountByEnumeratingWithState:(NSFastEnumerationState *)state
-                                           count:(NSUInteger)len
-                                    sectionIndex:(NSUInteger)sectionIndex {
-    [_realm verifyThread];
-    if (!_results->is_valid()) {
-        @throw RLMException(@"Collection is no longer valid");
-    }
-    // The fast enumeration buffer size is currently a hardcoded number in the
-    // compiler so this can't actually happen, but just in case it changes in
-    // the future...
-    if (len > RLMEnumerationBufferSize) {
-        len = RLMEnumerationBufferSize;
-    }
-
-    NSUInteger batchCount = 0, count = state->extra[1];
-
-    @autoreleasepool {
-        RLMAccessorContext ctx(*_info);
-        auto shared_results = std::make_shared<realm::Results>(*_results);
-
-        for (NSUInteger index = state->state; index < count && batchCount < len; ++index) {
-            _strongBuffer[batchCount] = _results->get(ctx, sectionIndex + index);
-            batchCount++;
-        }
-
-        batchCount++;
-    }
-
-    for (NSUInteger i = batchCount; i < len; ++i) {
-        _strongBuffer[i] = nil;
-    }
-
-    if (batchCount == 0) {
-        // Release our data if we're done, as we're autoreleased and so may
-        // stick around for a while
-        if (_collection) {
-            _collection = nil;
-            [_realm unregisterEnumerator:self];
-        }
-
-        _snapshot = {};
-    }
-
-    state->itemsPtr = (__unsafe_unretained id *)(void *)_strongBuffer;
-    state->state += batchCount;
-    state->mutationsPtr = state->extra+1;
-
-    return batchCount;
-}
-
 - (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state
                                     count:(NSUInteger)len {
     [_realm verifyThread];
@@ -199,7 +147,6 @@ static const int RLMEnumerationBufferSize = 16;
 
     @autoreleasepool {
         RLMAccessorContext ctx(*_info);
-
         for (NSUInteger index = state->state; index < count && batchCount < len; ++index) {
             _strongBuffer[batchCount] = _results->get(ctx, index);
             batchCount++;
@@ -435,16 +382,6 @@ static NSArray *toArray(realm::IndexSet const& set) {
 
 - (NSArray *)modifications {
     return toArray(_indices.modifications);
-}
-
-static NSArray *toIndexPathArray(realm::IndexSet const& set, NSUInteger section) {
-    NSMutableArray *ret = [NSMutableArray new];
-    NSUInteger path[2] = {section, 0};
-    for (auto index : set.as_indexes()) {
-        path[1] = index;
-        [ret addObject:[NSIndexPath indexPathWithIndexes:path length:2]];
-    }
-    return ret;
 }
 
 - (NSArray<NSIndexPath *> *)deletionsInSection:(NSUInteger)section {

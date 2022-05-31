@@ -19,12 +19,12 @@
 #import <Foundation/Foundation.h>
 
 #import <Realm/RLMConstants.h>
-#import <Realm/RLMValue.h>
 #import <Realm/RLMThreadSafeReference.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@class RLMRealm, RLMResults, RLMSortDescriptor, RLMNotificationToken, RLMCollectionChange, RLMSectionedResults, RLMValue;
+@protocol RLMValue;
+@class RLMRealm, RLMResults, RLMSortDescriptor, RLMNotificationToken, RLMCollectionChange, RLMSectionedResults;
 typedef RLM_CLOSED_ENUM(int32_t, RLMPropertyType);
 typedef id<RLMValue> _Nonnull(^RLMSectionedResultsKeyBlock)(id);
 
@@ -411,6 +411,20 @@ __attribute__((warn_unused_result));
 - (RLMSectionedResults *)sectionedResultsSortedUsingKeyPath:(NSString *)keyPath
                                                   ascending:(BOOL)ascending
                                                    keyBlock:(RLMSectionedResultsKeyBlock)keyBlock;
+
+/**
+ Sorts and sections this collection from a given array of sort descriptors, returning the result
+ as an instance of `RLMSectionedResults`.
+
+ @param properties  An array of `RLMSortDescriptor`s to sort by. Note: the primary sort descriptor
+                   will be responsible for determining the section key.
+ @param keyBlock A callback which is invoked on each element in the Results collection.
+                This callback is to return the section key for the element in the collection.
+
+ @return An instance of RLMSectionedResults.
+ */
+- (RLMSectionedResults *)sectionedResultsUsingSortDescriptors:(NSArray<RLMSortDescriptor *> *)properties
+                                                     keyBlock:(RLMSectionedResultsKeyBlock)keyBlock;
 
 #pragma mark - Aggregating Property Values
 
