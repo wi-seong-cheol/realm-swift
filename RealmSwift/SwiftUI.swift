@@ -613,6 +613,219 @@ extension Projection: _ObservedResultsValue { }
     }
 }
 
+// MARK: ObservedSectionedResults
+
+/// A property wrapper type that represents the results of a query on a realm.
+///
+/// The results use the realm configuration provided by
+/// the environment value `EnvironmentValues/realmConfiguration`.
+///
+/// Unlike non-SwiftUI results collections, the ObservedResults is mutable. Writes to an ObservedResults collection implicitly
+/// perform a write transaction. If you add an object to the ObservedResults that the associated query would filter out, the object
+/// is added to the realm but not included in the ObservedResults.
+///
+/// Given `@ObservedResults var v` in SwiftUI, `$v` refers to a `BoundCollection`.
+///
+@available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+@propertyWrapper public struct ObservedSectionedResults<ResultType, Key>: DynamicProperty, BoundCollection where Key: RealmCollectionValue, ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
+    private class Storage: ObservableStorage<SectionedResults<ResultType, Key>> {
+        var setupHasRun = false
+        private func didSet() {
+            if setupHasRun {
+                setupValue()
+            }
+        }
+
+        func setupValue() {
+            /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
+            let realm = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration)
+//            value = realm.objects(ResultType.self)
+            if let sortDescriptor = sortDescriptor {
+//                value = value.sorted(byKeyPath: sortDescriptor.keyPath, ascending: sortDescriptor.ascending)
+            }
+
+            let filters = [searchFilter, filter ?? `where`].compactMap { $0 }
+            if !filters.isEmpty {
+                let compoundFilter = NSCompoundPredicate(andPredicateWithSubpredicates: filters)
+//                value = value.filter(compoundFilter)
+            }
+            setupHasRun = true
+        }
+
+        var sortDescriptor: SortDescriptor? {
+            didSet {
+                didSet()
+            }
+        }
+
+        var filter: NSPredicate? {
+            didSet {
+                didSet()
+            }
+        }
+        var `where`: NSPredicate? {
+            didSet {
+                didSet()
+            }
+        }
+        var configuration: Realm.Configuration? {
+            didSet {
+                didSet()
+            }
+        }
+
+        var searchString: String = ""
+        var searchFilter: NSPredicate? {
+            didSet {
+                didSet()
+            }
+        }
+    }
+
+    @Environment(\.realmConfiguration) var configuration
+    @ObservedObject private var storage: Storage
+    /// :nodoc:
+    fileprivate func searchText<T: ObjectBase>(_ text: String, on keyPath: KeyPath<T, String>) {
+        if text.isEmpty {
+            if storage.searchFilter != nil {
+                storage.searchFilter = nil
+            }
+        } else if text != storage.searchString {
+            storage.searchFilter = Query<T>()[dynamicMember: keyPath].contains(text).predicate
+        }
+        storage.searchString = text
+    }
+    /// Stores an NSPredicate used for filtering the Results. This is mutually exclusive
+    /// to the `where` parameter.
+    @State public var filter: NSPredicate? {
+        willSet {
+            storage.where = nil
+            storage.filter = newValue
+        }
+    }
+    /// Stores a type safe query used for filtering the Results. This is mutually exclusive
+    /// to the `filter` parameter.
+    @State public var `where`: ((Query<ResultType>) -> Query<Bool>)? {
+        // The introduction of this property produces a compiler bug in
+        // Xcode 12.5.1. So Swift Queries are supported on Xcode 13 and above
+        // when used with SwiftUI.
+        willSet {
+            storage.filter = nil
+            storage.where = newValue?(Query()).predicate
+        }
+    }
+    /// :nodoc:
+    @State public var sortDescriptor: SortDescriptor? {
+        willSet {
+            storage.sortDescriptor = newValue
+        }
+    }
+    /// :nodoc:
+    public var wrappedValue: SectionedResults<ResultType, Key> {
+        if !storage.setupHasRun {
+            storage.setupValue()
+        }
+        return storage.configuration != nil ? storage.value.freeze() : storage.value
+    }
+    /// :nodoc:
+    public var projectedValue: Self {
+        return self
+    }
+
+    /**
+     Initialize a `ObservedResults` struct for a given `Projection` type.
+     - parameter type: Observed type
+     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
+     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
+     if empty the configuration is set to the `defaultConfiguration`
+     - parameter filter: Observations will be made only for passing objects.
+     If no filter given - all objects will be observed
+     - parameter keyPaths: Only properties contained in the key paths array will be observed.
+     If `nil`, notifications will be delivered for any property change on the object.
+     String key paths which do not correspond to a valid a property will throw an exception.
+     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
+     */
+    public init<ObjectType: ObjectBase>(_ type: ResultType.Type,
+                                        configuration: Realm.Configuration? = nil,
+                                        filter: NSPredicate? = nil,
+                                        keyPaths: [String]? = nil,
+                                        sortDescriptor: SortDescriptor? = nil) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
+//        let results = Results<ResultType>(RLMResults<ResultType>.emptyDetached())
+//        self.storage = Storage(results, keyPaths)
+//        self.storage.configuration = configuration
+//        self.filter = filter
+//        self.sortDescriptor = sortDescriptor
+        fatalError()
+    }
+    /**
+     Initialize a `ObservedResults` struct for a given `Object` or `EmbeddedObject` type.
+     - parameter type: Observed type
+     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
+     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
+     if empty the configuration is set to the `defaultConfiguration`
+     - parameter filter: Observations will be made only for passing objects.
+     If no filter given - all objects will be observed
+     - parameter keyPaths: Only properties contained in the key paths array will be observed.
+     If `nil`, notifications will be delivered for any property change on the object.
+     String key paths which do not correspond to a valid a property will throw an exception.
+     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
+     */
+    public init(_ type: ResultType.Type,
+                configuration: Realm.Configuration? = nil,
+                filter: NSPredicate? = nil,
+                keyPaths: [String]? = nil,
+                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
+//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
+//        self.storage.configuration = configuration
+//        self.filter = filter
+//        self.sortDescriptor = sortDescriptor
+        fatalError()
+    }
+    /**
+     Initialize a `ObservedResults` struct for a given `Object` or `EmbeddedObject` type.
+     - parameter type: Observed type
+     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
+     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
+     if empty the configuration is set to the `defaultConfiguration`
+     - parameter where: Observations will be made only for passing objects.
+     If no type safe query is given - all objects will be observed
+     - parameter keyPaths: Only properties contained in the key paths array will be observed.
+     If `nil`, notifications will be delivered for any property change on the object.
+     String key paths which do not correspond to a valid a property will throw an exception.
+     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
+     */
+    public init(_ type: ResultType.Type,
+                configuration: Realm.Configuration? = nil,
+                where: ((Query<ResultType>) -> Query<Bool>)? = nil,
+                keyPaths: [String]? = nil,
+                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
+//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
+//        self.storage.configuration = configuration
+//        self.where = `where`
+//        self.sortDescriptor = sortDescriptor
+        fatalError()
+    }
+    /// :nodoc:
+    public init(_ type: ResultType.Type,
+                keyPaths: [String]? = nil,
+                configuration: Realm.Configuration? = nil,
+                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
+//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
+//        self.storage.configuration = configuration
+//        self.sortDescriptor = sortDescriptor
+        fatalError()
+    }
+
+    public mutating func update() {
+        // When the view updates, it will inject the @Environment
+        // into the propertyWrapper
+        if storage.configuration == nil {
+            storage.configuration = configuration
+        }
+    }
+}
+
+
 // MARK: ObservedRealmObject
 
 /// A property wrapper type that subscribes to an observable Realm `Object` or `List` and

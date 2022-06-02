@@ -144,8 +144,8 @@ extension Projection: KeypathSortable {}
 
     // MARK: Sectioned Results
 
-    public func sectioned<Key: RealmSectionKey>(by keyPath: KeyPath<Element, Key>,
-                                                ascending: Bool = true) -> SectionedResults<Element, Key> where Element: ObjectBase {
+    public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
+                                             ascending: Bool = true) -> SectionedResults<Element, Key> where Element: ObjectBase {
         let keyPathString = _name(for: keyPath)
         let sectionedResults = (collection as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
                                                                                              ascending: ascending) { value in
@@ -155,8 +155,8 @@ extension Projection: KeypathSortable {}
         return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
     }
 
-    public func sectioned<Key: RealmSectionKey>(by keyPath: KeyPath<Element, Key>,
-                                                sortDescriptors: [SortDescriptor]) -> SectionedResults<Element, Key> where Element: ObjectBase {
+    public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
+                                             sortDescriptors: [SortDescriptor]) -> SectionedResults<Element, Key> where Element: ObjectBase {
         let keyPathString = _name(for: keyPath)
 
         let sorted = self.sorted(by: sortDescriptors).collection

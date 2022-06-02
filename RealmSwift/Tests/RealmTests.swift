@@ -1510,7 +1510,7 @@ class RealmTests: TestCase {
 
 
         let sectionedResults = realm.objects(ModernSwiftStringObject.self)
-            .sectioned(by: \.stringCol.first, ascending: true)
+            .sectioned(by: \.stringCol.firstCharacter, ascending: true)
 
 
         let sectionedResults2 = realm.objects(ModernSwiftStringObject.self)
@@ -1594,4 +1594,14 @@ class RealmTests: TestCase {
          }
      }
      */
+}
+
+extension String {
+    var firstCharacter: String {
+        if let f = self.first {
+            return String(f)
+        } else {
+            return ""
+        }
+    }
 }

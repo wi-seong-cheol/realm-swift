@@ -640,6 +640,26 @@ extension Results: RealmSubscribable {
     }
 }
 
+// MARK: - Sectioned Results
+
+@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+extension SectionedResults: RealmSubscribable {
+    public func _observe<S>(_ keyPaths: [String]?, on queue: DispatchQueue?, _ subscriber: S) -> NotificationToken where SectionedResults<Element, Key> == S.Input, S : Subscriber, S.Failure == Error {
+        fatalError()
+    }
+
+    public func _observe<S>(_ keyPaths: [String]?, _ subscriber: S) -> NotificationToken where S : Subscriber, S.Failure == Never, S.Input == Void {
+        fatalError()
+    }
+
+    /// A publisher that emits Void each time the collection changes.
+    ///
+    /// Despite the name, this actually emits *after* the collection has changed.
+    public var objectWillChange: RealmPublishers.WillChange<SectionedResults> {
+        RealmPublishers.WillChange(self)
+    }
+}
+
 // MARK: RealmCollection
 
 @available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)

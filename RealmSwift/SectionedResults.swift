@@ -19,41 +19,7 @@
 import Foundation
 import Realm
 
-public protocol RealmSectionKey: _ObjcBridgeable { }
-
-///  A type which can appear in a Realm collection inside an Optional.
-///
-/// :nodoc:
-public protocol _RealmSectionKeyInsideOptional: RealmSectionKey {}
-
-extension Int: _RealmSectionKeyInsideOptional {}
-extension Int8: _RealmSectionKeyInsideOptional {}
-extension Int16: _RealmSectionKeyInsideOptional {}
-extension Int32: _RealmSectionKeyInsideOptional {}
-extension Int64: _RealmSectionKeyInsideOptional {}
-extension Float: _RealmSectionKeyInsideOptional {}
-extension Double: _RealmSectionKeyInsideOptional {}
-extension Bool: _RealmSectionKeyInsideOptional {}
-extension String: _RealmSectionKeyInsideOptional {}
-extension Date: _RealmSectionKeyInsideOptional {}
-extension Decimal128: _RealmSectionKeyInsideOptional {}
-extension ObjectId: _RealmSectionKeyInsideOptional {}
-extension UUID: _RealmSectionKeyInsideOptional {}
-extension AnyRealmValue: _RealmSectionKeyInsideOptional {}
-extension Character: _RealmSectionKeyInsideOptional {
-    public static func _rlmFromObjc(_ value: Any, insideOptional: Bool) -> Character? {
-        // unused method
-        fatalError()
-    }
-
-    public var _rlmObjcValue: Any {
-        return String(self) as NSString
-    }
-}
-
-extension Optional: RealmSectionKey where Wrapped: _RealmSectionKeyInsideOptional { }
-
-public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence {
+public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence, ThreadConfined, Equatable {
 
     let collection: RLMSectionedResults<AnyObject>
     let keyPath: KeyPath<Element, Key>
@@ -95,6 +61,12 @@ public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence {
             block(RealmSectionedResultsChange.fromObjc(value: col, change: change, error: error))
         }
     }
+
+    public var realm: Realm? { get {  fatalError() } }
+    public var isInvalidated: Bool { get {  fatalError() } }
+    public var isFrozen: Bool { get {  fatalError()  } }
+    public func freeze() -> Self { fatalError() }
+    public func thaw() -> Self? { fatalError() }
 }
 
 public struct Section<Element: RealmCollectionValue, Key>: Sequence {
@@ -121,6 +93,12 @@ public struct Section<Element: RealmCollectionValue, Key>: Sequence {
     public func makeIterator() -> RLMSectionIterator<Element> {
         return RLMSectionIterator(collection: collection)
     }
+
+    public var realm: Realm? { get {  fatalError() } }
+    public var isInvalidated: Bool { get {  fatalError() } }
+    public var isFrozen: Bool { get {  fatalError()  } }
+    public func freeze() -> Section<Element, Key> { fatalError() }
+    public func thaw() -> Self { fatalError() }
 }
 
 @frozen public enum RealmSectionedResultsChange<CollectionType> {
