@@ -1571,9 +1571,10 @@ class RealmTests: TestCase {
 
         print(sectionedResults)
 
-        let sectionedProjections = realm.objects(ModernSwiftStringProjection.self)
-            .sectioned(by: \.string.firstCharacter, ascending: true)
+//        let sectionedProjections = realm.objects(ModernSwiftStringProjection.self)
+//            .sectioned(by: \.string.firstCharacter, ascending: true)
 
+//        _name(for: kp)
     }
 
     /*
@@ -1597,7 +1598,34 @@ class RealmTests: TestCase {
          }
      }
      */
+
+    func testFoo() {
+        let kp: KeyPath<ModernSwiftStringProjection, String> = \ModernSwiftStringProjection.string
+        print(_name(for: kp))
+//        let proj = ModernSwiftStringProjection(projecting: ModernSwiftStringObject())
+//        proj.rootObject.lastAccessedNames = []
+//        print(proj.rootObject.lastAccessedNames)
+//        proj.lastAccessedKeyPath()
+    }
 }
+
+
+//public func _name<T: ObjectBase>(for keyPath: PartialKeyPath<Projection<T>>) -> String {
+//    if let name = keyPath._kvcKeyPathString {
+//        return name
+//    }
+//    let names = NSMutableArray()
+//    let value = T.keyPathRecorder(with: names)[keyPath: keyPath]
+//    if let collection = value as? PropertyNameConvertible,
+//       let propertyInfo = collection.propertyInformation, propertyInfo.isLegacy {
+//        names.add(propertyInfo.key)
+//    }
+//
+//    if let storage = value as? RLMSwiftValueStorage {
+//        names.add(RLMSwiftValueStorageGetPropertyName(storage))
+//    }
+//    return names.componentsJoined(by: ".")
+//}
 
 extension String {
     var firstCharacter: String {

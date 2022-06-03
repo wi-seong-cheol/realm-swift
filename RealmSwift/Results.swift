@@ -169,6 +169,17 @@ extension Projection: KeypathSortable {}
         }
         return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
     }
+
+    public func sectioned<Key: _Persistable, ObjectType: ObjectBase>(by keyPath: KeyPath<Element, Key>,
+                                             ascending: Bool = true) -> SectionedResults<Key, Element> where Element: Projection<ObjectType> {
+        let keyPathString = _name(for: keyPath)
+        let sectionedResults = (collection as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
+                                                                                             ascending: ascending) { value in
+            return (value as! Element)[keyPath: keyPath]._rlmObjcValue as! RLMValue
+        }
+
+        return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
+    }
 }
 
 extension Results: Encodable where Element: Encodable {}

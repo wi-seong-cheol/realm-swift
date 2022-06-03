@@ -86,6 +86,10 @@ public struct Projected<T: ObjectBase, Value>: AnyProjected {
         }
     }
 
+    public var projectedValue: String {
+        return ""
+    }
+
     /// Declares a property which is lazily initialized to the type's default value.
     public init(_ projectedKeyPath: KeyPath<T, Value>) {
         self._projectedKeyPath = projectedKeyPath
@@ -246,6 +250,11 @@ open class Projection<Root: ObjectBase & RealmCollectionValue>: RealmCollectionV
     /// :nodoc:
     public static func _rlmDefaultValue() -> Self {
         fatalError()
+    }
+
+    internal func lastAccessedKeyPath() -> String {
+        print(rootObject.lastAccessedNames)
+        return ""
     }
 
 }
