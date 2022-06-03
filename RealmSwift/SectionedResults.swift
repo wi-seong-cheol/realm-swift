@@ -19,7 +19,7 @@
 import Foundation
 import Realm
 
-public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence, ThreadConfined, Equatable {
+public struct SectionedResults<Key: _Persistable, Element: RealmCollectionValue>: Sequence, ThreadConfined, Equatable {
 
     let collection: RLMSectionedResults<AnyObject>
     let keyPath: KeyPath<Element, Key>
@@ -29,8 +29,8 @@ public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence, Th
         self.keyPath = keyPath
     }
 
-    public subscript(_ index: Int) -> Section<Element, Key> {
-        return Section<Element, Key>(rlmSection: collection[UInt(index)], keyPath: keyPath)
+    public subscript(_ index: Int) -> Section<Key, Element> {
+        return Section<Key, Element>(rlmSection: collection[UInt(index)], keyPath: keyPath)
     }
 
     public subscript(_ indexPath: IndexPath) -> Element {
@@ -45,7 +45,7 @@ public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence, Th
         return collection.addNotificationBlock(wrapObserveBlock(block))
     }
 
-    public func makeIterator() -> RLMSectionedResultsIterator<Element, Key> {
+    public func makeIterator() -> RLMSectionedResultsIterator<Key, Element> {
         return RLMSectionedResultsIterator(collection: collection, keyPath: keyPath)
     }
 
@@ -69,7 +69,7 @@ public struct SectionedResults<Element: RealmCollectionValue, Key>: Sequence, Th
     public func thaw() -> Self? { fatalError() }
 }
 
-public struct Section<Element: RealmCollectionValue, Key>: Sequence {
+public struct Section<Key: _Persistable, Element: RealmCollectionValue>: Sequence {
 
     let collection: RLMSection<AnyObject>
     let keyPath: KeyPath<Element, Key>
@@ -97,7 +97,7 @@ public struct Section<Element: RealmCollectionValue, Key>: Sequence {
     public var realm: Realm? { get {  fatalError() } }
     public var isInvalidated: Bool { get {  fatalError() } }
     public var isFrozen: Bool { get {  fatalError()  } }
-    public func freeze() -> Section<Element, Key> { fatalError() }
+    public func freeze() -> Section<Key, Element> { fatalError() }
     public func thaw() -> Self { fatalError() }
 }
 
@@ -140,8 +140,8 @@ public struct Section<Element: RealmCollectionValue, Key>: Sequence {
                 deletions: change.deletions as [IndexPath],
                 insertions: change.insertions as [IndexPath],
                 modifications: change.modifications as [IndexPath],
-                           sectionsToInsert: IndexSet(change.sectionsToInsert.map { $0 as! Int }),
-                           sectionsToDelete: IndexSet(change.sectionsToRemove.map { $0 as! Int }))
+                           sectionsToInsert: change.sectionsToInsert,
+                           sectionsToDelete: change.sectionsToRemove)
         }
         return .initial(value!)
     }
@@ -150,7 +150,7 @@ public struct Section<Element: RealmCollectionValue, Key>: Sequence {
 /**
  An iterator for a `SectionedResults` instance.
  */
-@frozen public struct RLMSectionedResultsIterator<Element: RealmCollectionValue, Key>: IteratorProtocol {
+@frozen public struct RLMSectionedResultsIterator<Key: _Persistable, Element: RealmCollectionValue>: IteratorProtocol {
     private var generatorBase: NSFastEnumerationIterator
     private let keyPath: KeyPath<Element, Key>
 
@@ -160,9 +160,9 @@ public struct Section<Element: RealmCollectionValue, Key>: Sequence {
     }
 
     /// Advance to the next element and return it, or `nil` if no next element exists.
-    public mutating func next() -> Section<Element, Key>? {
+    public mutating func next() -> Section<Key, Element>? {
         guard let next = generatorBase.next() else { return nil }
-        return Section<Element, Key>(rlmSection: next as! RLMSection<AnyObject>, keyPath: keyPath)
+        return Section<Key, Element>(rlmSection: next as! RLMSection<AnyObject>, keyPath: keyPath)
     }
 }
 

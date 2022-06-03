@@ -145,7 +145,7 @@ extension Projection: KeypathSortable {}
     // MARK: Sectioned Results
 
     public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
-                                             ascending: Bool = true) -> SectionedResults<Element, Key> where Element: ObjectBase {
+                                             ascending: Bool = true) -> SectionedResults<Key, Element> where Element: ObjectBase {
         let keyPathString = _name(for: keyPath)
         let sectionedResults = (collection as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
                                                                                              ascending: ascending) { value in
@@ -156,16 +156,17 @@ extension Projection: KeypathSortable {}
     }
 
     public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
-                                             sortDescriptors: [SortDescriptor]) -> SectionedResults<Element, Key> where Element: ObjectBase {
+                                             sortDescriptors: [SortDescriptor]) -> SectionedResults<Key, Element> where Element: ObjectBase {
         let keyPathString = _name(for: keyPath)
-
-        let sorted = self.sorted(by: sortDescriptors).collection
-
-        let sectionedResults = (sorted as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
-                                                                                         ascending: true) { value in
+        guard let sortDescriptor = sortDescriptors.first else {
+            throwRealmException("Can not section Results with empty sortDescriptor parameter.")
+        }
+        if keyPathString != sortDescriptor.keyPath {
+            throwRealmException("The section key path must match the primary sort descriptor.")
+        }
+        let sectionedResults = collection.sectionedResults(using: sortDescriptors.map(ObjectiveCSupport.convert)) { value in
             return (value as! Element)[keyPath: keyPath]._rlmObjcValue as! RLMValue
         }
-
         return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
     }
 }

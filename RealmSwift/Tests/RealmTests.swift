@@ -1571,6 +1571,9 @@ class RealmTests: TestCase {
 
         print(sectionedResults)
 
+        let sectionedProjections = realm.objects(ModernSwiftStringProjection.self)
+            .sectioned(by: \.string.firstCharacter, ascending: true)
+
     }
 
     /*

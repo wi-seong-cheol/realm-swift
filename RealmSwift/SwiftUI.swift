@@ -627,8 +627,8 @@ extension Projection: _ObservedResultsValue { }
 /// Given `@ObservedResults var v` in SwiftUI, `$v` refers to a `BoundCollection`.
 ///
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
-@propertyWrapper public struct ObservedSectionedResults<ResultType, Key>: DynamicProperty, BoundCollection where Key: RealmCollectionValue, ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
-    private class Storage: ObservableStorage<SectionedResults<ResultType, Key>> {
+@propertyWrapper public struct ObservedSectionedResults<Key, ResultType>: DynamicProperty, BoundCollection where Key: _Persistable, ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
+    private class Storage: ObservableStorage<SectionedResults<Key, ResultType>> {
         var setupHasRun = false
         private func didSet() {
             if setupHasRun {
@@ -721,7 +721,7 @@ extension Projection: _ObservedResultsValue { }
         }
     }
     /// :nodoc:
-    public var wrappedValue: SectionedResults<ResultType, Key> {
+    public var wrappedValue: SectionedResults<Key, ResultType> {
         if !storage.setupHasRun {
             storage.setupValue()
         }
@@ -746,11 +746,18 @@ extension Projection: _ObservedResultsValue { }
      - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
      */
     public init<ObjectType: ObjectBase>(_ type: ResultType.Type,
+                                        sectionKeyPath: KeyPath<ResultType, Key>,
+                                        sortDescriptors: [SortDescriptor],
                                         configuration: Realm.Configuration? = nil,
                                         filter: NSPredicate? = nil,
-                                        keyPaths: [String]? = nil,
-                                        sortDescriptor: SortDescriptor? = nil) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
-//        let results = Results<ResultType>(RLMResults<ResultType>.emptyDetached())
+                                        keyPaths: [String]? = nil) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
+        let results: SectionedResults<Key, ResultType>!// = Results<ResultType>(RLMResults<ResultType>.emptyDetached()).sectioned(by: sectionKeyPath, sortDescriptors: sortDescriptors)
+
+
+        let r = Results<ResultType>(RLMResults<ResultType>.emptyDetached())//.sectioned(by: sectionKeyPath, sortDescriptors: sortDescriptors)
+
+//        r.sectioned(by: sectionKeyPath, ascending: true)
+
 //        self.storage = Storage(results, keyPaths)
 //        self.storage.configuration = configuration
 //        self.filter = filter
