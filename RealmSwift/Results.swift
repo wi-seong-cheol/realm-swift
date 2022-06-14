@@ -141,45 +141,6 @@ extension Projection: KeypathSortable {}
     public static func == (lhs: Results<Element>, rhs: Results<Element>) -> Bool {
         lhs.collection.isEqual(rhs.collection)
     }
-
-    // MARK: Sectioned Results
-
-    public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
-                                             ascending: Bool = true) -> SectionedResults<Key, Element> where Element: ObjectBase {
-        let keyPathString = _name(for: keyPath)
-        let sectionedResults = (collection as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
-                                                                                             ascending: ascending) { value in
-            return (value as! Element)[keyPath: keyPath]._rlmObjcValue as! RLMValue
-        }
-
-        return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
-    }
-
-    public func sectioned<Key: _Persistable>(by keyPath: KeyPath<Element, Key>,
-                                             sortDescriptors: [SortDescriptor]) -> SectionedResults<Key, Element> where Element: ObjectBase {
-        let keyPathString = _name(for: keyPath)
-        guard let sortDescriptor = sortDescriptors.first else {
-            throwRealmException("Can not section Results with empty sortDescriptor parameter.")
-        }
-        if keyPathString != sortDescriptor.keyPath {
-            throwRealmException("The section key path must match the primary sort descriptor.")
-        }
-        let sectionedResults = collection.sectionedResults(using: sortDescriptors.map(ObjectiveCSupport.convert)) { value in
-            return (value as! Element)[keyPath: keyPath]._rlmObjcValue as! RLMValue
-        }
-        return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
-    }
-
-    public func sectioned<Key: _Persistable, ObjectType: ObjectBase>(by keyPath: KeyPath<Element, Key>,
-                                             ascending: Bool = true) -> SectionedResults<Key, Element> where Element: Projection<ObjectType> {
-        let keyPathString = _name(for: keyPath)
-        let sectionedResults = (collection as! RLMResults<AnyObject>).sectionedResultsSorted(usingKeyPath: keyPathString.isEmpty ? "self" : keyPathString,
-                                                                                             ascending: ascending) { value in
-            return (value as! Element)[keyPath: keyPath]._rlmObjcValue as! RLMValue
-        }
-
-        return SectionedResults(rlmSectionedResults: sectionedResults, keyPath: keyPath)
-    }
 }
 
 extension Results: Encodable where Element: Encodable {}

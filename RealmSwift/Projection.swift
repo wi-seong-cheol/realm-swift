@@ -251,12 +251,6 @@ open class Projection<Root: ObjectBase & RealmCollectionValue>: RealmCollectionV
     public static func _rlmDefaultValue() -> Self {
         fatalError()
     }
-
-    internal func lastAccessedKeyPath() -> String {
-        print(rootObject.lastAccessedNames)
-        return ""
-    }
-
 }
 
 extension ProjectionObservable {

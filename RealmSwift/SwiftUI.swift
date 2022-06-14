@@ -613,22 +613,10 @@ extension Projection: _ObservedResultsValue { }
     }
 }
 
-// MARK: ObservedSectionedResults
-
-/// A property wrapper type that represents the results of a query on a realm.
-///
-/// The results use the realm configuration provided by
-/// the environment value `EnvironmentValues/realmConfiguration`.
-///
-/// Unlike non-SwiftUI results collections, the ObservedResults is mutable. Writes to an ObservedResults collection implicitly
-/// perform a write transaction. If you add an object to the ObservedResults that the associated query would filter out, the object
-/// is added to the realm but not included in the ObservedResults.
-///
-/// Given `@ObservedResults var v` in SwiftUI, `$v` refers to a `BoundCollection`.
-///
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
-@propertyWrapper public struct ObservedSectionedResults<Key, ResultType>: DynamicProperty, BoundCollection where Key: _Persistable, ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
-    private class Storage: ObservableStorage<SectionedResults<Key, ResultType>> {
+@propertyWrapper public struct ObservedSectionResults<Key: _Persistable & Hashable, ResultType>: DynamicProperty, BoundCollection where ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
+    private class Storage: ObservableStorage<Results<ResultType>> {
+        var sectionedResults: SectionedResults<Key, ResultType>?
         var setupHasRun = false
         private func didSet() {
             if setupHasRun {
@@ -639,20 +627,27 @@ extension Projection: _ObservedResultsValue { }
         func setupValue() {
             /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
             let realm = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration)
-//            value = realm.objects(ResultType.self)
-            if let sortDescriptor = sortDescriptor {
-//                value = value.sorted(byKeyPath: sortDescriptor.keyPath, ascending: sortDescriptor.ascending)
-            }
+            value = realm.objects(ResultType.self)
 
             let filters = [searchFilter, filter ?? `where`].compactMap { $0 }
             if !filters.isEmpty {
                 let compoundFilter = NSCompoundPredicate(andPredicateWithSubpredicates: filters)
-//                value = value.filter(compoundFilter)
+                value = value.filter(compoundFilter)
             }
+
+            if sortDescriptors.isEmpty {
+                sortDescriptors.append(.init(keyPath: keyPathString, ascending: true))
+            }
+
+            sectionedResults = value.sectioned(sortDescriptors: sortDescriptors,
+                                               { (str: ResultType) in
+                str[keyPath: self.keyPath]
+            })
+
             setupHasRun = true
         }
 
-        var sortDescriptor: SortDescriptor? {
+        var sortDescriptors: [SortDescriptor] = [] {
             didSet {
                 didSet()
             }
@@ -679,6 +674,25 @@ extension Projection: _ObservedResultsValue { }
             didSet {
                 didSet()
             }
+        }
+
+        var keyPath: KeyPath<ResultType, Key>
+        var keyPathString: String
+
+        init(_ value: Results<ResultType>, keyPath: KeyPath<ResultType, Key>, _ keyPaths: [String]? = nil) where ResultType: ObjectBase {
+            self.keyPath = keyPath
+            self.keyPathString = _name(for: keyPath)
+            super.init(value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value)
+            self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
+            self.keyPaths = keyPaths
+        }
+
+        init<BoxedType: ObjectBase>(_ value: Results<ResultType>, keyPath: KeyPath<ResultType, Key>, _ keyPaths: [String]? = nil) where ResultType: Projection<BoxedType> {
+            self.keyPath = keyPath
+            self.keyPathString = _name(for: keyPath)
+            super.init(value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value)
+            self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
+            self.keyPaths = keyPaths
         }
     }
 
@@ -715,9 +729,9 @@ extension Projection: _ObservedResultsValue { }
         }
     }
     /// :nodoc:
-    @State public var sortDescriptor: SortDescriptor? {
+    @State public var sortDescriptors: [SortDescriptor] = [] {
         willSet {
-            storage.sortDescriptor = newValue
+            storage.sortDescriptors = newValue
         }
     }
     /// :nodoc:
@@ -725,102 +739,62 @@ extension Projection: _ObservedResultsValue { }
         if !storage.setupHasRun {
             storage.setupValue()
         }
-        return storage.configuration != nil ? storage.value.freeze() : storage.value
+        guard let sectionedResults = storage.sectionedResults else {
+            fatalError("Could not instantiate SectionedResults")
+        }
+        print(sectionedResults)
+        return sectionedResults
     }
     /// :nodoc:
     public var projectedValue: Self {
         return self
     }
 
-    /**
-     Initialize a `ObservedResults` struct for a given `Projection` type.
-     - parameter type: Observed type
-     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
-     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
-     if empty the configuration is set to the `defaultConfiguration`
-     - parameter filter: Observations will be made only for passing objects.
-     If no filter given - all objects will be observed
-     - parameter keyPaths: Only properties contained in the key paths array will be observed.
-     If `nil`, notifications will be delivered for any property change on the object.
-     String key paths which do not correspond to a valid a property will throw an exception.
-     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
-     */
     public init<ObjectType: ObjectBase>(_ type: ResultType.Type,
                                         sectionKeyPath: KeyPath<ResultType, Key>,
-                                        sortDescriptors: [SortDescriptor],
                                         configuration: Realm.Configuration? = nil,
                                         filter: NSPredicate? = nil,
-                                        keyPaths: [String]? = nil) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
-        let results: SectionedResults<Key, ResultType>!// = Results<ResultType>(RLMResults<ResultType>.emptyDetached()).sectioned(by: sectionKeyPath, sortDescriptors: sortDescriptors)
-
-
-        let r = Results<ResultType>(RLMResults<ResultType>.emptyDetached())//.sectioned(by: sectionKeyPath, sortDescriptors: sortDescriptors)
-
-//        r.sectioned(by: sectionKeyPath, ascending: true)
-
-//        self.storage = Storage(results, keyPaths)
-//        self.storage.configuration = configuration
-//        self.filter = filter
-//        self.sortDescriptor = sortDescriptor
-        fatalError()
+                                        keyPaths: [String]? = nil,
+                                        sortDescriptors: [SortDescriptor] = []) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
+        let results = Results<ResultType>(RLMResults<ResultType>.emptyDetached())
+        self.storage = Storage(results, keyPath: sectionKeyPath, keyPaths)
+        self.storage.configuration = configuration
+        self.filter = filter
+        self.sortDescriptors = sortDescriptors
     }
-    /**
-     Initialize a `ObservedResults` struct for a given `Object` or `EmbeddedObject` type.
-     - parameter type: Observed type
-     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
-     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
-     if empty the configuration is set to the `defaultConfiguration`
-     - parameter filter: Observations will be made only for passing objects.
-     If no filter given - all objects will be observed
-     - parameter keyPaths: Only properties contained in the key paths array will be observed.
-     If `nil`, notifications will be delivered for any property change on the object.
-     String key paths which do not correspond to a valid a property will throw an exception.
-     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
-     */
+
     public init(_ type: ResultType.Type,
+                sectionKeyPath: KeyPath<ResultType, Key>,
                 configuration: Realm.Configuration? = nil,
                 filter: NSPredicate? = nil,
                 keyPaths: [String]? = nil,
-                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
-//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
-//        self.storage.configuration = configuration
-//        self.filter = filter
-//        self.sortDescriptor = sortDescriptor
-        fatalError()
+                sortDescriptors: [SortDescriptor] = []) where ResultType: Object {
+        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPath: sectionKeyPath, keyPaths)
+        self.storage.configuration = configuration
+        self.filter = filter
+        self.sortDescriptors = sortDescriptors
     }
-    /**
-     Initialize a `ObservedResults` struct for a given `Object` or `EmbeddedObject` type.
-     - parameter type: Observed type
-     - parameter configuration: The `Realm.Configuration` used when creating the Realm,
-     user's sync configuration for the given partition value will be set as the `syncConfiguration`,
-     if empty the configuration is set to the `defaultConfiguration`
-     - parameter where: Observations will be made only for passing objects.
-     If no type safe query is given - all objects will be observed
-     - parameter keyPaths: Only properties contained in the key paths array will be observed.
-     If `nil`, notifications will be delivered for any property change on the object.
-     String key paths which do not correspond to a valid a property will throw an exception.
-     - parameter sortDescriptor: A sequence of `SortDescriptor`s to sort by
-     */
+
     public init(_ type: ResultType.Type,
+                sectionKeyPath: KeyPath<ResultType, Key>,
                 configuration: Realm.Configuration? = nil,
                 where: ((Query<ResultType>) -> Query<Bool>)? = nil,
                 keyPaths: [String]? = nil,
-                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
-//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
-//        self.storage.configuration = configuration
-//        self.where = `where`
-//        self.sortDescriptor = sortDescriptor
-        fatalError()
+                sortDescriptors: [SortDescriptor] = []) where ResultType: Object {
+        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPath: sectionKeyPath, keyPaths)
+        self.storage.configuration = configuration
+        self.where = `where`
+        self.sortDescriptors = sortDescriptors
     }
     /// :nodoc:
     public init(_ type: ResultType.Type,
+                sectionKeyPath: KeyPath<ResultType, Key>,
                 keyPaths: [String]? = nil,
                 configuration: Realm.Configuration? = nil,
-                sortDescriptor: SortDescriptor? = nil) where ResultType: Object {
-//        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPaths)
-//        self.storage.configuration = configuration
-//        self.sortDescriptor = sortDescriptor
-        fatalError()
+                sortDescriptors: [SortDescriptor] = []) where ResultType: Object {
+        self.storage = Storage(Results(RLMResults<ResultType>.emptyDetached()), keyPath: sectionKeyPath, keyPaths)
+        self.storage.configuration = configuration
+        self.sortDescriptors = sortDescriptors
     }
 
     public mutating func update() {
