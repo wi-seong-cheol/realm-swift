@@ -1,7 +1,7 @@
 x.y.z Release notes (yyyy-MM-dd)
 =============================================================
 ### Enhancements
-* None.
+* Allow using `SyncSubscriptionSet.append` or `RLMSyncSubscriptionSet.add` to update a named subscription query. This will allow us to add a subscriptions with the same name more than once, only if the passed query is different.
 
 ### Fixed
 * Using `seedFilePath` threw an exception if the Realm file being opened
@@ -10,6 +10,7 @@ x.y.z Release notes (yyyy-MM-dd)
 * The `intialSubscriptions` callback was invoked every time a Realm was opened
   regardless of the value of `rerunOnOpen` and if the Realm was already open on
   another thread (since v10.28.0).
+* Added `initialSubscription` and `rerunOnOpen` when copying `RLMRealmConfiguration`, this was making `RLMRealmConfiguration.defaultConfiguration` to not work with this values.
 
 <!-- ### Breaking Changes - ONLY INCLUDE FOR NEW MAJOR version -->
 
