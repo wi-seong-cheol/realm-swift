@@ -298,6 +298,7 @@ using namespace realm;
     schema->_unmanagedClass = _unmanagedClass;
     schema->_isSwiftClass = _isSwiftClass;
     schema->_isEmbedded = _isEmbedded;
+    schema->_isAsymmetric = _isAsymmetric;
     schema->_properties = [[NSArray allocWithZone:zone] initWithArray:_properties copyItems:YES];
     schema->_computedProperties = [[NSArray allocWithZone:zone] initWithArray:_computedProperties copyItems:YES];
     [schema _propertiesDidChange];
@@ -347,6 +348,7 @@ using namespace realm;
     objectSchema.name = self.objectStoreName;
     objectSchema.primary_key = _primaryKeyProperty ? _primaryKeyProperty.columnName.UTF8String : "";
     objectSchema.is_embedded = ObjectSchema::IsEmbedded(_isEmbedded);
+    objectSchema.is_asymmetric = ObjectSchema::IsAsymmetric(_isAsymmetric);
     for (RLMProperty *prop in _properties) {
         Property p = [prop objectStoreCopy:schema];
         p.is_primary = (prop == _primaryKeyProperty);
@@ -362,6 +364,7 @@ using namespace realm;
     RLMObjectSchema *schema = [RLMObjectSchema new];
     schema.className = @(objectSchema.name.c_str());
     schema.isEmbedded = objectSchema.is_embedded;
+    schema.isAsymmetric = objectSchema.is_asymmetric;
 
     // create array of RLMProperties
     NSMutableArray *properties = [NSMutableArray arrayWithCapacity:objectSchema.persisted_properties.size()];
