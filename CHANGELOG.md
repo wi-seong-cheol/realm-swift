@@ -10,6 +10,8 @@ x.y.z Release notes (yyyy-MM-dd)
 * The `intialSubscriptions` callback was invoked every time a Realm was opened
   regardless of the value of `rerunOnOpen` and if the Realm was already open on
   another thread (since v10.28.0).
+* Do not show an error message in cases where `RLMProgressNotificationToken` session is already deallocated ([#7831](https://github.com/realm/realm-swift/issues/7831),
+  since v2.3.0).
 
 <!-- ### Breaking Changes - ONLY INCLUDE FOR NEW MAJOR version -->
 
