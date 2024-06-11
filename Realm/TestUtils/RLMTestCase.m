@@ -23,7 +23,7 @@
 #import <Realm/RLMSchema_Private.h>
 #import <Realm/RLMRealmConfiguration_Private.h>
 
-static NSString *parentProcessBundleIdentifier()
+static NSString *parentProcessBundleIdentifier(void)
 {
     static BOOL hasInitializedIdentifier;
     static NSString *identifier;
@@ -35,11 +35,11 @@ static NSString *parentProcessBundleIdentifier()
     return identifier;
 }
 
-NSURL *RLMDefaultRealmURL() {
+NSURL *RLMDefaultRealmURL(void) {
     return [NSURL fileURLWithPath:RLMRealmPathForFileAndBundleIdentifier(@"default.realm", parentProcessBundleIdentifier())];
 }
 
-NSURL *RLMTestRealmURL() {
+NSURL *RLMTestRealmURL(void) {
     return [NSURL fileURLWithPath:RLMRealmPathForFileAndBundleIdentifier(@"test.realm", parentProcessBundleIdentifier())];
 }
 
@@ -54,17 +54,18 @@ static void deleteOrThrow(NSURL *fileURL) {
     }
 }
 
-NSData *RLMGenerateKey() {
+NSData *RLMGenerateKey(void) {
     uint8_t buffer[64];
     (void)SecRandomCopyBytes(kSecRandomDefault, 64, buffer);
     return [[NSData alloc] initWithBytes:buffer length:sizeof(buffer)];
 }
 
-static BOOL encryptTests() {
+static BOOL encryptTests(void) {
     static BOOL encryptAll = NO;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        if (getenv("REALM_ENCRYPT_ALL")) {
+        const char *str = getenv("REALM_ENCRYPT_ALL");
+        if (str && *str) {
             encryptAll = YES;
         }
     });
@@ -120,8 +121,12 @@ static BOOL encryptTests() {
     [self resetRealmState];
 
     // Delete Realm files
-    [self deleteRealmFileAtURL:RLMDefaultRealmURL()];
-    [self deleteRealmFileAtURL:RLMTestRealmURL()];
+    NSURL *directory = RLMDefaultRealmURL().URLByDeletingLastPathComponent;
+    NSError *error = nil;
+    for (NSString *file in [NSFileManager.defaultManager
+                            contentsOfDirectoryAtPath:directory.path error:&error]) {
+        deleteOrThrow([directory URLByAppendingPathComponent:file]);
+    }
 }
 
 - (void)deleteRealmFileAtURL:(NSURL *)fileURL {
@@ -214,7 +219,7 @@ static BOOL encryptTests() {
     return _bgQueue;
 }
 
-- (void)dispatchAsync:(dispatch_block_t)block {
+- (void)dispatchAsync:(RLM_SWIFT_SENDABLE dispatch_block_t)block {
     dispatch_async(self.bgQueue, ^{
         @autoreleasepool {
             block();
@@ -222,7 +227,7 @@ static BOOL encryptTests() {
     });
 }
 
-- (void)dispatchAsyncAndWait:(dispatch_block_t)block {
+- (void)dispatchAsyncAndWait:(RLM_SWIFT_SENDABLE dispatch_block_t)block {
     [self dispatchAsync:block];
     dispatch_sync(_bgQueue, ^{});
 }

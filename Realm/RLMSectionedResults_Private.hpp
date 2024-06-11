@@ -24,12 +24,16 @@
 
 @protocol RLMValue;
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
+RLM_HIDDEN_BEGIN
+
+RLM_DIRECT_MEMBERS
 @interface RLMSectionedResultsChange ()
 - (instancetype)initWithChanges:(realm::SectionedResultsChangeSet)indices;
 @end
 
+RLM_DIRECT_MEMBERS
 @interface RLMSectionedResultsEnumerator : NSObject
 
 - (NSUInteger)countByEnumeratingWithState:(NSFastEnumerationState *)state
@@ -40,7 +44,7 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-@interface RLMSectionedResults()
+@interface RLMSectionedResults ()
 
 - (instancetype)initWithResults:(RLMResults *)results
                        keyBlock:(RLMSectionedResultsKeyBlock)keyBlock;
@@ -69,4 +73,6 @@ NSUInteger RLMFastEnumerate(NSFastEnumerationState *state,
 
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HIDDEN_END
+
+RLM_HEADER_AUDIT_END(nullability, sendability)

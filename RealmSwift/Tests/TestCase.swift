@@ -24,14 +24,15 @@ import XCTest
 
 #if canImport(RealmTestSupport)
 import RealmTestSupport
+import RealmSwiftTestSupport
 #endif
 
 func inMemoryRealm(_ inMememoryIdentifier: String) -> Realm {
     return try! Realm(configuration: Realm.Configuration(inMemoryIdentifier: inMememoryIdentifier))
 }
 
-class TestCase: RLMTestCaseBase {
-    var exceptionThrown = false
+class TestCase: RLMTestCaseBase, @unchecked Sendable {
+    @Locked var exceptionThrown = false
     var testDir: String! = nil
 
     let queue = DispatchQueue(label: "background")
@@ -134,111 +135,34 @@ class TestCase: RLMTestCaseBase {
     }
 }
 
-extension XCTestCase {
-    /// Check whether two test objects are equal (refer to the same row in the same Realm), even if their models
-    /// don't define a primary key.
-    func assertEqual<O: Object>(_ o1: O?, _ o2: O?, fileName: StaticString = #file, lineNumber: UInt = #line) {
-        if o1 == nil && o2 == nil {
-            return
-        }
-        if let o1 = o1, let o2 = o2, o1.isSameObject(as: o2) {
-            return
-        }
-        XCTFail("Objects expected to be equal, but weren't. First: \(String(describing: o1)), "
-            + "second: \(String(describing: o2))", file: (fileName), line: lineNumber)
+extension Realm {
+    @discardableResult
+    public func create<T: Object>(_ type: T.Type, value: [String: Any], update: UpdatePolicy = .error) -> T {
+        return create(type, value: value as Any, update: update)
     }
 
-    /// Check whether two collections containing Realm objects are equal.
-    func assertEqual<C: Collection>(_ c1: C, _ c2: C, fileName: StaticString = #file, lineNumber: UInt = #line)
-        where C.Iterator.Element: Object {
-            XCTAssertEqual(c1.count, c2.count, "Collection counts were incorrect", file: (fileName), line: lineNumber)
-            for (o1, o2) in zip(c1, c2) {
-                assertEqual(o1, o2, fileName: fileName, lineNumber: lineNumber)
-            }
+    @discardableResult
+    public func create<T: Object>(_ type: T.Type, value: [Any], update: UpdatePolicy = .error) -> T {
+        return create(type, value: value as Any, update: update)
+    }
+}
+
+extension Object {
+    public convenience init(value: [String: Any]) {
+        self.init(value: value as Any)
     }
 
-    func assertEqual<T: Equatable>(_ expected: [T?], _ actual: [T?], file: StaticString = #file, line: UInt = #line) {
-        if expected.count != actual.count {
-            XCTFail("assertEqual failed: (\"\(expected)\") is not equal to (\"\(actual)\")",
-                file: (file), line: line)
-            return
-        }
+    public convenience init(value: [Any]) {
+        self.init(value: value as Any)
+    }
+}
 
-        XCTAssertEqual(expected.count, actual.count, "Collection counts were incorrect", file: (file), line: line)
-        for (e, a) in zip(expected, actual) where e != a {
-            XCTFail("assertEqual failed: (\"\(expected)\") is not equal to (\"\(actual)\")",
-                file: (file), line: line)
-            return
-        }
+extension AsymmetricObject {
+    public convenience init(value: [String: Any]) {
+        self.init(value: value as Any)
     }
 
-    func assertSucceeds(message: String? = nil, fileName: StaticString = #file,
-                        lineNumber: UInt = #line, block: () throws -> Void) {
-        do {
-            try block()
-        } catch {
-            XCTFail("Expected no error, but instead caught <\(error)>.",
-                file: (fileName), line: lineNumber)
-        }
-    }
-
-    func assertFails<T>(_ expectedError: Realm.Error.Code, _ message: String? = nil,
-                        fileName: StaticString = #file, lineNumber: UInt = #line,
-                        block: () throws -> T) {
-        do {
-            _ = try block()
-            XCTFail("Expected to catch <\(expectedError)>, but no error was thrown.",
-                file: (fileName), line: lineNumber)
-        } catch let e as Realm.Error where e.code == expectedError {
-            // Success!
-        } catch {
-            XCTFail("Expected to catch <\(expectedError)>, but instead caught <\(error)>.",
-                file: (fileName), line: lineNumber)
-        }
-    }
-
-    func assertFails<T>(_ expectedError: Error, _ message: String? = nil,
-                        fileName: StaticString = #file, lineNumber: UInt = #line,
-                        block: () throws -> T) {
-        do {
-            _ = try block()
-            XCTFail("Expected to catch <\(expectedError)>, but no error was thrown.",
-                file: (fileName), line: lineNumber)
-        } catch let e where e._code == expectedError._code {
-            // Success!
-        } catch {
-            XCTFail("Expected to catch <\(expectedError)>, but instead caught <\(error)>.",
-                file: (fileName), line: lineNumber)
-        }
-    }
-
-    func assertNil<T>(block: @autoclosure() -> T?, _ message: String? = nil,
-                      fileName: StaticString = #file, lineNumber: UInt = #line) {
-        XCTAssert(block() == nil, message ?? "", file: (fileName), line: lineNumber)
-    }
-
-    func assertMatches(_ block: @autoclosure () -> String, _ regexString: String, _ message: String? = nil,
-                       fileName: String = #file, lineNumber: UInt = #line) {
-        RLMAssertMatches(self, block, regexString, message, fileName, lineNumber)
-    }
-
-    /// Check that a `MutableSet` contains all expected elements.
-    func assertSetContains<T, U>(_ set: MutableSet<T>, keyPath: KeyPath<T, U>, items: [U]) where U: Hashable {
-        var itemMap = Dictionary(uniqueKeysWithValues: items.map { ($0, false)})
-        set.map { $0[keyPath: keyPath]}.forEach {
-            itemMap[$0] = items.contains($0)
-        }
-        // ensure all items are present in the set.
-        XCTAssertFalse(itemMap.values.contains(false))
-    }
-
-    /// Check that an `AnyRealmCollection` contains all expected elements.
-    func assertAnyRealmCollectionContains<T, U>(_ set: AnyRealmCollection<T>, keyPath: KeyPath<T, U>, items: [U]) where U: Hashable {
-        var itemMap = Dictionary(uniqueKeysWithValues: items.map { ($0, false)})
-        set.map { $0[keyPath: keyPath]}.forEach {
-            itemMap[$0] = items.contains($0)
-        }
-        // ensure all items are present in the set.
-        XCTAssertFalse(itemMap.values.contains(false))
+    public convenience init(value: [Any]) {
+        self.init(value: value as Any)
     }
 }

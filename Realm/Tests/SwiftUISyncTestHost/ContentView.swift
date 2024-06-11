@@ -20,6 +20,13 @@ import SwiftUI
 import RealmSwift
 import Combine
 
+class SwiftPerson: Object, ObjectKeyIdentifiable {
+    @Persisted(primaryKey: true) public var _id: ObjectId
+    @Persisted public var firstName: String = ""
+    @Persisted public var lastName: String = ""
+    @Persisted public var age: Int = 30
+}
+
 enum LoggingViewState {
     case initial
     case loggingIn
@@ -28,7 +35,7 @@ enum LoggingViewState {
 }
 
 struct MainView: View {
-    let testType: String = ProcessInfo.processInfo.environment["async_view_type"]!
+    let testType = TestType(rawValue: ProcessInfo.processInfo.environment["async_view_type"]!)!
     let partitionValue: String? = ProcessInfo.processInfo.environment["partition_value"]
 
     @State var viewState: LoggingViewState = .initial
@@ -49,14 +56,14 @@ struct MainView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.purple)
-                .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                .transition(AnyTransition.move(edge: .trailing))
             case .loggingIn:
                 VStack {
                     ProgressView("Logging in...")
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.blue)
-                .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                .transition(AnyTransition.move(edge: .leading))
             case .loggedIn:
                 VStack {
                     Text("Logged in")
@@ -68,60 +75,83 @@ struct MainView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(Color.yellow)
-                .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                .transition(AnyTransition.move(edge: .trailing))
             case .syncing:
                 switch testType {
-                case "async_open":
+                case .asyncOpen:
                     AsyncOpenView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "async_open_environment_partition":
+                        .transition(AnyTransition.move(edge: .leading))
+                case .asyncOpenEnvironmentPartition:
                     AsyncOpenPartitionView()
-                        .environment(\.partitionValue, partitionValue ?? user!.id)
+                        .environment(\.partitionValue, partitionValue)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "async_open_environment_configuration":
+                        .transition(AnyTransition.move(edge: .leading))
+                case .asyncOpenEnvironmentConfiguration:
                     AsyncOpenPartitionView()
-                        .environment(\.realmConfiguration, user!.configuration(partitionValue: user!.id))
+                        .environment(\.realmConfiguration, user!.configuration(partitionValue: partitionValue!))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "async_open_flexible_sync":
-                    AsyncOpenFlexibleSyncView()
+                        .transition(AnyTransition.move(edge: .leading))
+                case .asyncOpenFlexibleSync:
+                    AsyncOpenFlexibleSyncView(firstName: partitionValue!)
                         .environment(\.realmConfiguration, user!.flexibleSyncConfiguration())
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "auto_open":
+                        .transition(AnyTransition.move(edge: .leading))
+                case .asyncOpenCustomConfiguration:
+                    AsyncOpenPartitionView()
+                        .environment(\.realmConfiguration, getConfigurationForUser(user!))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.green)
+                        .transition(AnyTransition.move(edge: .leading))
+                case .autoOpen:
                     AutoOpenView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "auto_open_environment_partition":
+                        .transition(AnyTransition.move(edge: .leading))
+                case .autoOpenEnvironmentPartition:
                     AutoOpenPartitionView()
-                        .environment(\.partitionValue, user!.id)
+                        .environment(\.partitionValue, partitionValue)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "auto_open_environment_configuration":
+                        .transition(AnyTransition.move(edge: .leading))
+                case .autoOpenEnvironmentConfiguration:
                     AutoOpenPartitionView()
-                        .environment(\.realmConfiguration, user!.configuration(partitionValue: user!.id))
+                        .environment(\.realmConfiguration, user!.configuration(partitionValue: partitionValue!))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                case "auto_open_flexible_sync":
-                    AutoOpenFlexibleSyncView()
+                        .transition(AnyTransition.move(edge: .leading))
+                case .autoOpenFlexibleSync:
+                    AutoOpenFlexibleSyncView(firstName: partitionValue!)
                         .environment(\.realmConfiguration, user!.flexibleSyncConfiguration())
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(Color.green)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                default:
-                    EmptyView()
+                        .transition(AnyTransition.move(edge: .leading))
+                case .autoOpenCustomConfiguration:
+                    AutoOpenPartitionView()
+                        .environment(\.realmConfiguration, getConfigurationForUser(user!))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(Color.green)
+                        .transition(AnyTransition.move(edge: .leading))
                 }
             }
         }
+    }
+
+    func getConfigurationForUser(_ user: User) -> Realm.Configuration {
+        var configuration = user.configuration(partitionValue: partitionValue!)
+        configuration.encryptionKey = getKey()
+        return configuration
+    }
+
+    func getKey() -> Data {
+        var key = Data(count: 64)
+        _ = key.withUnsafeMutableBytes { (pointer: UnsafeMutableRawBufferPointer) in
+            SecRandomCopyBytes(kSecRandomDefault, 64, pointer.baseAddress!) }
+        return key
     }
 }
 
@@ -165,17 +195,11 @@ struct LoginView: View {
 class LoginHelper: ObservableObject {
     var cancellables = Set<AnyCancellable>()
 
-    private let appConfig = AppConfiguration(baseURL: "http://localhost:9090",
-                                             transport: nil,
-                                             localAppName: nil,
-                                             localAppVersion: nil)
-    private var clientDataRoot: URL {
-        let applicationSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        return applicationSupportDirectory.appendingPathComponent("\(Bundle.main.bundleIdentifier!).xctrunner")
-    }
+    private let appConfig = AppConfiguration(baseURL: "http://localhost:9090")
 
     func login(email: String, password: String, completion: @escaping (User) -> Void) {
-        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig, rootDirectory: clientDataRoot)
+        Logger.shared.level = .all
+        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig)
         app.login(credentials: .emailPassword(email: email, password: password))
             .receive(on: DispatchQueue.main)
             .sink(receiveCompletion: { result in
@@ -189,12 +213,12 @@ class LoginHelper: ObservableObject {
     }
 
     func logout() {
-        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig, rootDirectory: clientDataRoot)
+        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig)
         app.currentUser?.logOut { _ in }
     }
 
     func logoutAllUsers() {
-        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig, rootDirectory: clientDataRoot)
+        let app = RealmSwift.App(id: ProcessInfo.processInfo.environment["app_id"]!, configuration: appConfig)
         for (_, user) in app.allUsers {
             user.logOut { _ in }
         }
@@ -220,7 +244,7 @@ struct AsyncOpenView: View {
                 if canNavigate {
                     ListView()
                         .environment(\.realm, realm)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                        .transition(AnyTransition.move(edge: .leading))
                 } else {
                     VStack {
                         Text(String(progress!.completedUnitCount))
@@ -234,12 +258,12 @@ struct AsyncOpenView: View {
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
                     .onAppear {
                         self.progress = progress
                     }
@@ -267,7 +291,7 @@ struct AutoOpenView: View {
                 if canNavigate {
                     ListView()
                         .environment(\.realm, realm)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                        .transition(AnyTransition.move(edge: .leading))
                 } else {
                     VStack {
                         Text(String(progress!.completedUnitCount))
@@ -281,12 +305,12 @@ struct AutoOpenView: View {
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
                     .onAppear {
                         self.progress = progress
                     }
@@ -307,30 +331,30 @@ struct AsyncOpenPartitionView: View {
             case .connecting:
                 ProgressView()
             case .waitingForUser:
-                Text("")
-                    .accessibilityIdentifier("waiting_user_view")
-                ProgressView("Waiting for user to logged in...")
+                VStack {
+                    Button("User") {}
+                        .accessibilityIdentifier("waiting_user_view")
+                    ProgressView("Waiting for user to logged in...")
+                }
             case .open(let realm):
                 if ProcessInfo.processInfo.environment["is_sectioned_results"] == "true" {
-                    if #available(macOS 12.0, *) {
-                        SectionedResultsView()
-                            .environment(\.realm, realm)
-                            .transition(AnyTransition.move(edge: .leading)).animation(.default)
-                    }
+                    SectionedResultsView()
+                        .environment(\.realm, realm)
+                        .transition(AnyTransition.move(edge: .leading))
                 } else {
                     ListView()
                         .environment(\.realm, realm)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                        .transition(AnyTransition.move(edge: .leading))
                 }
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             }
         }
     }
@@ -348,22 +372,24 @@ struct AutoOpenPartitionView: View {
             case .connecting:
                 ProgressView()
             case .waitingForUser:
-                Text("")
-                    .accessibilityIdentifier("waiting_user_view")
-                ProgressView("Waiting for user to logged in...")
+                VStack {
+                    Button("User") {}
+                        .accessibilityIdentifier("waiting_user_view")
+                    ProgressView("Waiting for user to logged in...")
+                }
             case .open(let realm):
                 ListView()
                     .environment(\.realm, realm)
-                    .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                    .transition(AnyTransition.move(edge: .leading))
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             }
         }
     }
@@ -380,6 +406,7 @@ struct AsyncOpenFlexibleSyncView: View {
     @AsyncOpen(appId: ProcessInfo.processInfo.environment["app_id"]!,
                timeout: 2000)
     var asyncOpen
+    let firstName: String
 
     var body: some View {
         VStack {
@@ -398,7 +425,7 @@ struct AsyncOpenFlexibleSyncView: View {
                                     let subs = realm.subscriptions
                                     try await subs.update {
                                         subs.append(QuerySubscription<SwiftPerson>(name: "person_age") {
-                                            $0.age > 5 && $0.firstName == ProcessInfo.processInfo.environment["firstName"]!
+                                            $0.age > 5 && $0.firstName == firstName
                                         })
                                     }
                                     subscriptionState = .completed
@@ -415,17 +442,17 @@ struct AsyncOpenFlexibleSyncView: View {
                 case .navigate:
                     ListView()
                         .environment(\.realm, realm)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                        .transition(AnyTransition.move(edge: .leading))
                 }
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             }
         }
     }
@@ -436,6 +463,7 @@ struct AutoOpenFlexibleSyncView: View {
     @AutoOpen(appId: ProcessInfo.processInfo.environment["app_id"]!,
               timeout: 2000)
     var asyncOpen
+    let firstName: String
 
     var body: some View {
         VStack {
@@ -454,7 +482,7 @@ struct AutoOpenFlexibleSyncView: View {
                                     let subs = realm.subscriptions
                                     try await subs.update {
                                         subs.append(QuerySubscription<SwiftPerson>(name: "person_age") {
-                                            $0.age > 2 && $0.firstName == ProcessInfo.processInfo.environment["firstName"]!
+                                            $0.age > 2 && $0.firstName == firstName
                                         })
                                     }
                                     subscriptionState = .completed
@@ -471,17 +499,17 @@ struct AutoOpenFlexibleSyncView: View {
                 case .navigate:
                     ListView()
                         .environment(\.realm, realm)
-                        .transition(AnyTransition.move(edge: .leading)).animation(.default)
+                        .transition(AnyTransition.move(edge: .leading))
                 }
             case .error(let error):
                 ErrorView(error: error)
                     .background(Color.red)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             case .progress(let progress):
                 ProgressView(progress)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.yellow)
-                    .transition(AnyTransition.move(edge: .trailing)).animation(.default)
+                    .transition(AnyTransition.move(edge: .trailing))
             }
         }
     }
@@ -507,11 +535,11 @@ struct ListView: View {
                 Text("\(object.firstName)")
             }
         }
-        .navigationTitle("SwiftHugeSyncObject's List")
+        .navigationTitle("SwiftPerson's List")
     }
 }
 
-@available(macOS 12.0, *)
+@available(macOS 13, *)
 struct SectionedResultsView: View {
     @ObservedSectionedResults(SwiftPerson.self, sectionKeyPath: \.firstName) var objects
 

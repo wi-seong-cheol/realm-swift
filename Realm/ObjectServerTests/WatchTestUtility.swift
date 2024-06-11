@@ -21,32 +21,53 @@ import RealmSwift
 import XCTest
 
 final public class WatchTestUtility: ChangeEventDelegate {
-    public let semaphore: DispatchSemaphore
-    public let isOpenSemaphore: DispatchSemaphore
-    private var targetEventCount: Int
-    private var changeEventCount = 0
-    private var didOpenWasCalled = false
-    private var matchingObjectId: ObjectId?
-    private weak var expectation: XCTestExpectation?
+    private let testCase: XCTestCase
+    private let matchingObjectId: ObjectId?
+    private let openExpectation: XCTestExpectation
+    private let closeExpectation: XCTestExpectation
+    private var changeExpectation: XCTestExpectation?
+    private let expectError: Bool
+    public var didCloseError: Error?
 
-    public init(targetEventCount: Int, matchingObjectId: ObjectId? = nil, expectation: inout XCTestExpectation) {
-        self.targetEventCount = targetEventCount
+    public init(testCase: XCTestCase, matchingObjectId: ObjectId? = nil, expectError: Bool = false) {
+        self.testCase = testCase
         self.matchingObjectId = matchingObjectId
-        self.expectation = expectation
-        semaphore = DispatchSemaphore(value: 0)
-        isOpenSemaphore = DispatchSemaphore(value: 0)
+        self.expectError = expectError
+        openExpectation = testCase.expectation(description: "Open watch stream")
+        closeExpectation = testCase.expectation(description: "Close watch stream")
+    }
+
+    public func waitForOpen() {
+        testCase.wait(for: [openExpectation], timeout: 20.0)
+    }
+
+    public func waitForClose() {
+        testCase.wait(for: [closeExpectation], timeout: 20.0)
+    }
+
+    public func expectEvent() {
+        XCTAssertNil(changeExpectation)
+        changeExpectation = testCase.expectation(description: "Watch change event")
+    }
+
+    public func waitForEvent() throws {
+        try testCase.wait(for: [XCTUnwrap(changeExpectation)], timeout: 20.0)
+        changeExpectation = nil
     }
 
     public func changeStreamDidOpen(_ changeStream: ChangeStream) {
-        didOpenWasCalled = true
-        isOpenSemaphore.signal()
+        openExpectation.fulfill()
     }
 
     public func changeStreamDidClose(with error: Error?) {
-        XCTAssertNil(error)
-        XCTAssertTrue(didOpenWasCalled)
-        XCTAssertEqual(changeEventCount, targetEventCount)
-        expectation?.fulfill()
+        if expectError {
+            XCTAssertNotNil(error)
+        } else {
+            XCTAssertNil(error)
+        }
+
+        didCloseError = error
+        closeExpectation.fulfill()
     }
 
     public func changeStreamDidReceive(error: Error) {
@@ -54,23 +75,15 @@ final public class WatchTestUtility: ChangeEventDelegate {
     }
 
     public func changeStreamDidReceive(changeEvent: AnyBSON?) {
-        changeEventCount+=1
         XCTAssertNotNil(changeEvent)
-        guard let changeEvent = changeEvent else {
-            return
-        }
+        XCTAssertNotNil(changeExpectation)
+        guard let changeEvent = changeEvent else { return }
+        guard let document = changeEvent.documentValue else { return }
 
-        guard let document = changeEvent.documentValue else {
-            return
+        if let matchingObjectId = matchingObjectId {
+            let objectId = document["fullDocument"]??.documentValue!["_id"]??.objectIdValue!
+            XCTAssertEqual(objectId, matchingObjectId)
         }
-
-        guard let matchingObjectId = matchingObjectId else {
-            semaphore.signal()
-            return
-        }
-
-        let objectId = document["fullDocument"]??.documentValue!["_id"]??.objectIdValue!
-        XCTAssertEqual(objectId, matchingObjectId)
-        semaphore.signal()
+        changeExpectation?.fulfill()
     }
 }

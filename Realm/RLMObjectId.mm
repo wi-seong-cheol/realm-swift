@@ -18,6 +18,7 @@
 
 #import "RLMObjectId_Private.hpp"
 
+#import "RLMError_Private.hpp"
 #import "RLMUtil.hpp"
 
 #import <realm/object_id.hpp>
@@ -88,7 +89,7 @@
 }
 
 + (instancetype)objectId {
-    return [[RLMObjectId alloc] initWithValue:realm::ObjectId::gen()];
+    return [[self alloc] initWithValue:realm::ObjectId::gen()];
 }
 
 - (BOOL)isEqual:(id)object {

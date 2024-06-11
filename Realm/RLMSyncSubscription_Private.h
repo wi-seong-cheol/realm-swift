@@ -20,7 +20,7 @@
 
 #import <Realm/RLMRealm.h>
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 #pragma mark - Subscription
 
@@ -56,7 +56,13 @@ NS_ASSUME_NONNULL_BEGIN
                            predicate:(NSPredicate *)predicate
                       updateExisting:(BOOL)updateExisting;
 
+- (void)update:(__attribute__((noescape)) void(^)(void))block
+         queue:(nullable dispatch_queue_t)queue
+       timeout:(NSTimeInterval)timeout
+    onComplete:(void(^)(NSError *))completionBlock;
+
 - (void)waitForSynchronizationOnQueue:(nullable dispatch_queue_t)queue
+                              timeout:(NSTimeInterval)timeout
                       completionBlock:(void(^)(NSError *))completionBlock;
 
 - (RLMSyncSubscriptionEnumerator *)fastEnumerator;
@@ -67,4 +73,4 @@ NSUInteger RLMFastEnumerate(NSFastEnumerationState *state,
 
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

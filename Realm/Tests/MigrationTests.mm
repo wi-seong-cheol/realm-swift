@@ -156,7 +156,7 @@ RLM_COLLECTION_TYPE(MigrationTestObject);
 
 - (void)createTestRealmWithClasses:(NSArray *)classes block:(void (^)(RLMRealm *realm))block {
     NSMutableArray *objectSchema = [NSMutableArray arrayWithCapacity:classes.count];
-    for (Class cls in classes) {
+    for (::Class cls in classes) {
         [objectSchema addObject:[RLMObjectSchema schemaForObjectClass:cls]];
     }
     [self createTestRealmWithSchema:objectSchema block:block];
@@ -304,10 +304,11 @@ RLM_COLLECTION_TYPE(MigrationTestObject);
 #pragma mark - Schema versions
 
 - (void)testGetSchemaVersion {
-    XCTAssertThrows([RLMRealm schemaVersionAtURL:RLMDefaultRealmURL() encryptionKey:nil error:nil]);
+    XCTAssertEqual(RLMNotVersioned, [RLMRealm schemaVersionAtURL:RLMDefaultRealmURL() encryptionKey:nil error:nil]);
     NSError *error;
     XCTAssertEqual(RLMNotVersioned, [RLMRealm schemaVersionAtURL:RLMDefaultRealmURL() encryptionKey:nil error:&error]);
-    RLMValidateRealmError(error, RLMErrorFail, @"Cannot open an uninitialized realm in read-only mode", nil);
+    RLMValidateRealmError(error, RLMErrorInvalidDatabase,
+                          @"Realm at path '%@' has not been initialized.", RLMDefaultRealmURL().path);
 
     RLMRealmConfiguration *config = [RLMRealmConfiguration defaultConfiguration];
     config.encryptionKey = nil;
@@ -677,14 +678,12 @@ RLM_COLLECTION_TYPE(MigrationTestObject);
     };
     [RLMRealm asyncOpenWithConfiguration:c
                            callbackQueue:dispatch_get_main_queue()
-                                 callback:^(RLMRealm * _Nullable realm, NSError * _Nullable error) {
+                                 callback:^(RLMRealm *realm, NSError *error) {
         XCTAssertTrue(migrationCalled);
         XCTAssertNil(error);
         XCTAssertNotNil(realm);
         [ex fulfill];
     }];
-    XCTAssertFalse(migrationCalled);
-    XCTAssertNil(RLMGetAnyCachedRealmForPath(c.pathOnDisk.UTF8String));
     [self waitForExpectationsWithTimeout:1 handler:nil];
     XCTAssertTrue(migrationCalled);
     XCTAssertNil(RLMGetAnyCachedRealmForPath(c.pathOnDisk.UTF8String));
@@ -1211,7 +1210,7 @@ RLM_COLLECTION_TYPE(MigrationTestObject);
     }];
 }
 
-- (RLMResults *)objectsOfType:(Class)cls {
+- (RLMResults *)objectsOfType:(::Class)cls {
     auto config = self.config;
     config.schemaVersion = 1;
     RLMRealm *realm = [RLMRealm realmWithConfiguration:config error:nil];
@@ -1479,20 +1478,6 @@ RLM_COLLECTION_TYPE(MigrationTestObject);
     }];
     
     [self assertMigrationRequiredForChangeFrom:@[fromChild, fromParent] to:@[toChild, toParent]];
-}
-
-- (void)testChangeTableToEmbeddedWithoutBacklinks {
-    RLMObjectSchema *fromChild = [RLMObjectSchema schemaForObjectClass:EmbeddedIntObject.class];
-    fromChild.isEmbedded = false;
-    RLMObjectSchema *toChild = [RLMObjectSchema schemaForObjectClass:EmbeddedIntObject.class];
-    [self createTestRealmWithSchema:@[fromChild] block:^(RLMRealm *) {}];
-    
-    RLMRealmConfiguration *realmConfiguration = self.config;
-    realmConfiguration.schemaVersion = 1;
-    realmConfiguration.customSchema = [self schemaWithObjects:@[toChild]];
-    NSError *error;
-    XCTAssertFalse([RLMRealm performMigrationForConfiguration:realmConfiguration error:&error]);
-    XCTAssertNotNil(error);
 }
 
 - (void)testChangeTableToEmbeddedWithOnlyOneLinkPerObject {

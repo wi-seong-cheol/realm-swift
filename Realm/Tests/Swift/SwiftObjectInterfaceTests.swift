@@ -154,7 +154,7 @@ class SwiftRLMObjectInterfaceTests: RLMTestCase {
 
         try! realm.transaction {
             // create self referencing subclass
-            let sub = SwiftRLMSelfRefrencingSubclass.createInDefaultRealm(withValue: ["string", []])
+            let sub = SwiftRLMSelfRefrencingSubclass.createInDefaultRealm(withValue: ["string"])
             let sub2 = SwiftRLMSelfRefrencingSubclass()
             sub.objects.add(sub2)
             sub.objectSet.add(sub2)
@@ -250,10 +250,10 @@ class SwiftRLMObjectInterfaceTests: RLMTestCase {
     func testPrimitiveArray() {
         let obj = SwiftRLMPrimitiveArrayObject()
         let str = "str" as NSString
-        let data = "str".data(using: .utf8)! as Data as NSData
+        let data = Data("str".utf8) as NSData
         let date = NSDate()
         let str2 = "str2" as NSString
-        let data2 = "str2".data(using: .utf8)! as Data as NSData
+        let data2 = Data("str2".utf8) as NSData
         let date2 = NSDate(timeIntervalSince1970: 0)
 
         obj.stringCol.add(str)
@@ -291,7 +291,7 @@ class SwiftRLMObjectInterfaceTests: RLMTestCase {
     func testPrimitiveSet() {
         let obj = SwiftRLMPrimitiveSetObject()
         let str = "str" as NSString
-        let data = "str".data(using: .utf8)! as Data as NSData
+        let data = Data("str".utf8) as NSData
         let date = NSDate()
         obj.stringCol.add(str)
         XCTAssertTrue(obj.stringCol.contains(str))
@@ -384,17 +384,17 @@ class SwiftRLMObjectInterfaceTests: RLMTestCase {
     func testCreateOrUpdate() {
         let realm = RLMRealm.default()
         realm.beginWriteTransaction()
-        _ = SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 1])
-        let objects = SwiftRLMPrimaryStringObject.allObjects()
+        SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 1])
+        let objects = SwiftRLMPrimaryStringObject.allObjects() as! RLMResults<SwiftRLMPrimaryStringObject>
         XCTAssertEqual(objects.count, UInt(1), "Should have 1 object")
-        XCTAssertEqual((objects[0] as! SwiftRLMPrimaryStringObject).intCol, 1, "Value should be 1")
+        XCTAssertEqual(objects[0].intCol, 1, "Value should be 1")
 
-        _ = SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["stringCol": "string2", "intCol": 2])
+        SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string2", 2])
         XCTAssertEqual(objects.count, UInt(2), "Should have 2 objects")
 
-        _ = SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 3])
+        SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 3])
         XCTAssertEqual(objects.count, UInt(2), "Should have 2 objects")
-        XCTAssertEqual((objects[0] as! SwiftRLMPrimaryStringObject).intCol, 3, "Value should be 3")
+        XCTAssertEqual(objects[0].intCol, 3, "Value should be 3")
 
         try! realm.commitWriteTransaction()
     }
@@ -402,7 +402,7 @@ class SwiftRLMObjectInterfaceTests: RLMTestCase {
     func testObjectForPrimaryKey() {
         let realm = RLMRealm.default()
         realm.beginWriteTransaction()
-        _ = SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 1])
+        SwiftRLMPrimaryStringObject.createOrUpdateInDefaultRealm(withValue: ["string", 1])
 
         let obj = SwiftRLMPrimaryStringObject.object(forPrimaryKey: "string")
         XCTAssertNotNil(obj!)

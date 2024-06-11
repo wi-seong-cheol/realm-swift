@@ -8,7 +8,7 @@ Pod::Spec.new do |s|
   s.description             = <<-DESC
                               The Realm Database, for Objective-C. (If you want to use Realm from Swift, see the “RealmSwift” pod.)
 
-                              Realm is a fast, easy-to-use replacement for Core Data & SQLite. Use it with Atlas Device Sync for realtime, automatic data sync. Works on iOS, macOS, tvOS & watchOS. Learn more and get help at https://www.mongodb.com/docs/realm/sdk/swift/.
+                              Realm is a fast, easy-to-use replacement for Core Data & SQLite. Use it with Atlas Device Sync for realtime, automatic data sync. Works on iOS, macOS, tvOS & watchOS. Learn more and get help at https://www.mongodb.com/docs/atlas/device-sdks/sdk/swift/.
                               DESC
   s.homepage                = "https://realm.io"
   s.source                  = { :git => 'https://github.com/realm/realm-swift.git', :tag => "v#{s.version}" }
@@ -24,17 +24,20 @@ Pod::Spec.new do |s|
                               # Realm module
                               'include/RLMArray.h',
                               'include/RLMAsymmetricObject.h',
+                              'include/RLMAsyncTask.h',
                               'include/RLMCollection.h',
                               'include/RLMConstants.h',
                               'include/RLMDecimal128.h',
                               'include/RLMDictionary.h',
                               'include/RLMEmbeddedObject.h',
+                              'include/RLMGeospatial.h',
+                              'include/RLMError.h',
+                              'include/RLMLogger.h',
                               'include/RLMMigration.h',
                               'include/RLMObject.h',
                               'include/RLMObjectBase.h',
                               'include/RLMObjectId.h',
                               'include/RLMObjectSchema.h',
-                              'include/RLMPlatform.h',
                               'include/RLMProperty.h',
                               'include/RLMRealm.h',
                               'include/RLMRealmConfiguration.h',
@@ -52,6 +55,7 @@ Pod::Spec.new do |s|
                               'include/RLMApp.h',
                               'include/RLMAppCredentials.h',
                               'include/RLMBSON.h',
+                              'include/RLMInitialSubscriptionsConfiguration.h',
                               'include/RLMNetworkTransport.h',
                               'include/RLMPushClient.h',
                               'include/RLMProviderClient.h',
@@ -61,7 +65,6 @@ Pod::Spec.new do |s|
                               'include/RLMSyncManager.h',
                               'include/RLMSyncSession.h',
                               'include/RLMUser.h',
-                              'include/RLMSyncUtil.h',
                               'include/RLMUserAPIKey.h',
                               'include/RLMAPIKeyAuth.h',
                               'include/RLMEmailPasswordAuth.h',
@@ -75,16 +78,22 @@ Pod::Spec.new do |s|
 
                               # Realm.Dynamic module
                               'include/RLMRealm_Dynamic.h',
-                              'include/RLMObjectBase_Dynamic.h'
+                              'include/RLMObjectBase_Dynamic.h',
+
+                              # Realm.Swift module
+                              'include/RLMSwiftObject.h'
 
                               # Realm.Private module
   private_header_files      = 'include/RLMAccessor.h',
                               'include/RLMApp_Private.h',
                               'include/RLMArray_Private.h',
+                              'include/RLMAsyncTask_Private.h',
                               'include/RLMBSON_Private.h',
                               'include/RLMCollection_Private.h',
                               'include/RLMDictionary_Private.h',
                               'include/RLMEvent.h',
+                              'include/RLMLogger_Private.h',
+                              'include/RLMMongoCollection_Private.h',
                               'include/RLMObjectBase_Private.h',
                               'include/RLMObjectSchema_Private.h',
                               'include/RLMObjectStore.h',
@@ -96,17 +105,19 @@ Pod::Spec.new do |s|
                               'include/RLMRealmConfiguration_Private.h',
                               'include/RLMRealm_Private.h',
                               'include/RLMResults_Private.h',
+                              'include/RLMScheduler.h',
                               'include/RLMSchema_Private.h',
                               'include/RLMSet_Private.h',
                               'include/RLMSwiftProperty.h',
                               'include/RLMSyncConfiguration_Private.h',
                               'include/RLMSyncSubscription_Private.h',
-                              'include/RLMSyncUtil_Private.h',
                               'include/RLMUpdateResult_Private.h',
                               'include/RLMUser_Private.h',
 
-
-  s.frameworks              = 'Security'
+  s.ios.frameworks          = 'Security'
+  s.ios.weak_framework      = 'UIKit'
+  s.tvos.weak_framework     = 'UIKit'
+  s.watchos.weak_framework  = 'UIKit'
   s.module_map              = 'Realm/Realm.modulemap'
   s.compiler_flags          = "-DREALM_HAVE_CONFIG -DREALM_COCOA_VERSION='@\"#{s.version}\"' -D__ASSERTMACROS__ -DREALM_ENABLE_SYNC"
   s.prepare_command         = 'sh scripts/setup-cocoapods.sh'
@@ -114,18 +125,33 @@ Pod::Spec.new do |s|
   s.private_header_files    = private_header_files
   s.header_mappings_dir     = 'include'
   s.pod_target_xcconfig     = { 'APPLICATION_EXTENSION_API_ONLY' => 'YES',
-                                'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
+                                'CLANG_CXX_LANGUAGE_STANDARD' => 'c++20',
                                 'CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF' => 'NO',
                                 'OTHER_CPLUSPLUSFLAGS' => '-isystem "${PODS_ROOT}/Realm/include/core" -fvisibility-inlines-hidden',
-                                'OTHER_CPLUSPLUSFLAGS[arch=armv7]' => '-isystem "${PODS_ROOT}/Realm/include/core" -fvisibility-inlines-hidden -fno-aligned-new',
                                 'USER_HEADER_SEARCH_PATHS' => '"${PODS_ROOT}/Realm/include" "${PODS_ROOT}/Realm/include/Realm"',
-                              }
-  s.preserve_paths          = %w(include scripts)
 
-  s.ios.deployment_target   = '9.0'
-  s.osx.deployment_target   = '10.9'
-  s.watchos.deployment_target = '2.0'
-  s.tvos.deployment_target = '9.0'
+                                'IPHONEOS_DEPLOYMENT_TARGET_1400' => '11.0',
+                                'IPHONEOS_DEPLOYMENT_TARGET_1500' => '12.0',
+                                'IPHONEOS_DEPLOYMENT_TARGET' => '$(IPHONEOS_DEPLOYMENT_TARGET_$(XCODE_VERSION_MAJOR))',
+                                'MACOSX_DEPLOYMENT_TARGET_1400' => '10.13',
+                                'MACOSX_DEPLOYMENT_TARGET_1500' => '10.13',
+                                'MACOSX_DEPLOYMENT_TARGET' => '$(MACOSX_DEPLOYMENT_TARGET_$(XCODE_VERSION_MAJOR))',
+                                'WATCHOS_DEPLOYMENT_TARGET_1400' => '4.0',
+                                'WATCHOS_DEPLOYMENT_TARGET_1500' => '4.0',
+                                'WATCHOS_DEPLOYMENT_TARGET' => '$(WATCHOS_DEPLOYMENT_TARGET_$(XCODE_VERSION_MAJOR))',
+                                'TVOS_DEPLOYMENT_TARGET_1400' => '11.0',
+                                'TVOS_DEPLOYMENT_TARGET_1500' => '12.0',
+                                'TVOS_DEPLOYMENT_TARGET' => '$(TVOS_DEPLOYMENT_TARGET_$(XCODE_VERSION_MAJOR))',
+
+                                'OTHER_LDFLAGS' => '"-Wl,-unexported_symbols_list,${PODS_ROOT}/Realm/Configuration/Realm/PrivateSymbols.txt"',
+                              }
+  s.preserve_paths          = %w(include scripts Configuration/Realm/PrivateSymbols.txt)
+  s.resource_bundles        = {'realm_objc_privacy' => ['Realm/PrivacyInfo.xcprivacy']}
+
+  s.ios.deployment_target   = '12.0'
+  s.osx.deployment_target   = '10.13'
+  s.watchos.deployment_target = '4.0'
+  s.tvos.deployment_target = '12.0'
 
   s.vendored_frameworks  = 'core/realm-monorepo.xcframework'
 

@@ -412,6 +412,37 @@
     XCTAssertEqual(3, [[results maxOfProperty:@"propA"] intValue]);
 }
 
+-(void)testRenamedPropertyObservation {
+    RLMRealm *realm = self.realmWithTestPath;
+    [realm transactionWithBlock:^{
+        [LinkToRenamedProperties createInRealm:realm withValue:@[]];
+    }];
+
+    __block bool first = true;
+    __block id expectation = [self expectationWithDescription:@""];
+    RLMResults<LinkToRenamedProperties *> *allObjects = [LinkToRenamedProperties allObjectsInRealm:realm];
+    id token = [allObjects addNotificationBlock:^(__unused RLMResults *results, RLMCollectionChange *change, __unused NSError *error) {
+        XCTAssertNotNil(results);
+        XCTAssert(first ? !change : !!change);
+        XCTAssertNil(error);
+        first = false;
+        [expectation fulfill];
+    } keyPaths:@[@"link"]];
+    [self waitForExpectationsWithTimeout:2.0 handler:nil];
+
+    expectation = [self expectationWithDescription:@""];
+    [self dispatchAsyncAndWait:^{
+        RLMRealm *realm = self.realmWithTestPath;
+        [realm transactionWithBlock:^{
+            LinkToRenamedProperties *object = (LinkToRenamedProperties *)[LinkToRenamedProperties allObjectsInRealm:realm].firstObject;
+            RenamedProperties *linkedObject = [RenamedProperties createInRealm:realm withValue:@[@1, @""]];
+            object.link = linkedObject;
+        }];
+    }];
+    [self waitForExpectationsWithTimeout:2.0 handler:nil];
+
+    [(RLMNotificationToken *)token invalidate];
+}
 
 - (void)testValueForCollectionOperationKeyPath {
     RLMRealm *realm = [RLMRealm defaultRealm];
@@ -692,7 +723,7 @@
     [realm cancelWriteTransaction];
 }
 
-static vm_size_t get_resident_size() {
+static vm_size_t get_resident_size(void) {
     struct task_basic_info info;
     mach_msg_type_number_t size = sizeof(info);
     task_info(mach_task_self(), TASK_BASIC_INFO, (task_info_t)&info, &size);
@@ -721,7 +752,7 @@ static vm_size_t get_resident_size() {
             XCTAssertEqualObjects([matches[0] stringCol], @"a");
         }
     }
-    XCTAssert(get_resident_size() < size * 2);
+    XCTAssertLessThan(get_resident_size(), size * 2);
 }
 
 - (void)testDeleteAllObjects
@@ -806,9 +837,7 @@ static vm_size_t get_resident_size() {
     [self dispatchAsyncAndWait:^{
         RLMRealm *realm = self.realmWithTestPath;
         [realm beginWriteTransaction];
-        // FIXME: this is roundabout because `table.clear()` does not update
-        // table views correctly
-        [realm deleteObjects:[IntObject objectsInRealm:realm where:@"intCol = 0"]];
+        [realm deleteObjects:[IntObject allObjectsInRealm:realm]];
         [realm commitWriteTransaction];
     }];
 
@@ -1184,7 +1213,7 @@ static vm_size_t get_resident_size() {
 
 #pragma mark - Frozen Results
 
-static RLMResults<IntObject *> *testResults() {
+static RLMResults<IntObject *> *testResults(void) {
     RLMRealm *realm = [RLMRealm defaultRealm];
     [realm transactionWithBlock:^{
         [IntObject createInDefaultRealmWithValue:@[@0]];

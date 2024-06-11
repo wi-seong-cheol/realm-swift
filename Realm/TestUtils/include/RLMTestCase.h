@@ -20,7 +20,7 @@
 #import "RLMAssertions.h"
 #import "RLMTestObjects.h"
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 #ifdef __cplusplus
 extern "C" {
@@ -53,11 +53,11 @@ NSData *RLMGenerateKey(void);
 - (nullable id)nonLiteralNil;
 - (BOOL)encryptTests;
 
-- (void)dispatchAsync:(dispatch_block_t)block;
-- (void)dispatchAsyncAndWait:(dispatch_block_t)block;
+- (void)dispatchAsync:(RLM_SWIFT_SENDABLE dispatch_block_t)block;
+- (void)dispatchAsyncAndWait:(RLM_SWIFT_SENDABLE dispatch_block_t)block;
 
 @property (nonatomic, readonly) dispatch_queue_t bgQueue;
 
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

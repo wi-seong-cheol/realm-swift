@@ -20,7 +20,7 @@ import Realm
 
 /// A tag protocol which marks types that can be used as the partition value
 /// for synchronized Realms.
-public protocol PartitionValue {
+public protocol PartitionValue: Sendable {
 }
 
 /// Protocol representing a BSON value.
@@ -90,7 +90,7 @@ extension MinKey: BSON {
 
 /// Enum representing a BSON value.
 /// - SeeAlso: bsonspec.org
-@frozen public enum AnyBSON: BSON {
+@frozen public enum AnyBSON: BSON, Sendable {
     /// A BSON double.
     case double(Double)
 

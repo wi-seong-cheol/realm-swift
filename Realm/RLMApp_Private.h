@@ -18,7 +18,7 @@
 
 #import <Realm/RLMApp.h>
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 /// Observer block for app notifications.
 typedef void(^RLMAppNotificationBlock)(RLMApp *);
@@ -27,25 +27,34 @@ typedef void(^RLMAppNotificationBlock)(RLMApp *);
 /// avoid dangling observers, therefore this must be retained to hold
 /// onto a subscription.
 @interface RLMAppSubscriptionToken : NSObject
-
-/// The underlying value of the subscription token.
-@property (nonatomic, readonly) NSUInteger value;
-
+- (void)unsubscribe;
 @end
 
 @interface RLMApp ()
+/// A custom base URL to request against. If not set or set to nil, the default base url for app services will be returned.
+@property (nonatomic, readonly) NSString *baseURL;
 /// Returns all currently cached Apps
 + (NSArray<RLMApp *> *)allApps;
 /// Subscribe to notifications for this RLMApp.
 - (RLMAppSubscriptionToken *)subscribe:(RLMAppNotificationBlock)block;
-/// Unsubscribe to notifications for this RLMApp.
-- (void)unsubscribe:(RLMAppSubscriptionToken *)token;
 
-+ (instancetype)appWithId:(NSString *)appId
-            configuration:(nullable RLMAppConfiguration *)configuration
-            rootDirectory:(nullable NSURL *)rootDirectory;
++ (instancetype)appWithConfiguration:(RLMAppConfiguration *)configuration;
++ (RLMApp *_Nullable)cachedAppWithId:(NSString *)appId;
 
 + (void)resetAppCache;
+
+/// Updates the base url used by Atlas device sync, in case the need to roam between servers (cloud and/or edge server).
+/// @param baseURL The new base url to connect to. Setting `nil` will reset the base url to the default url.
+/// @note Updating the base URL would trigger a client reset.
+- (void)updateBaseURL:(NSString *_Nullable)baseURL
+           completion:(RLMOptionalErrorBlock)completionHandler NS_REFINED_FOR_SWIFT;
+
 @end
 
-NS_ASSUME_NONNULL_END
+@interface RLMAppConfiguration ()
+@property (nonatomic) NSString *appId;
+@property (nonatomic) BOOL encryptMetadata;
+@property (nonatomic) NSURL *rootDirectory;
+@end
+
+RLM_HEADER_AUDIT_END(nullability, sendability)

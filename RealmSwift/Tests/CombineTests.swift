@@ -16,9 +16,9 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#if !(os(iOS) && (arch(i386) || arch(arm)))
 import XCTest
 import Combine
+import Realm.Private
 import RealmSwift
 
 class CombineIdentifiableObject: Object, ObjectKeyIdentifiable {
@@ -29,7 +29,7 @@ class CombineIdentifiableEmbeddedObject: EmbeddedObject, ObjectKeyIdentifiable {
     @objc dynamic var value = 0
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 extension Publisher {
     public func signal(_ semaphore: DispatchSemaphore) -> Publishers.HandleEvents<Self> {
         self.handleEvents(receiveOutput: { _ in semaphore.signal() })
@@ -41,7 +41,7 @@ extension Publisher {
 // results in a warning about it being redundant due to the enclosing check, so
 // it needs to be out of line.
 func hasCombine() -> Bool {
-    if #available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *) {
+    if #available(macOS 10.15, watchOS 6.0, iOS 13.0, tvOS 13.0, *) {
         return true
     }
     return false
@@ -84,8 +84,8 @@ class ObjectIdentifiableTests: TestCase {
         let realm = try! Realm()
         let (obj1, obj2) = try! realm.write {
             return (
-                realm.create(CombineIdentifiableObject.self, value: [1, [1]]),
-                realm.create(CombineIdentifiableObject.self, value: [2, [2]])
+                realm.create(CombineIdentifiableObject.self, value: [1, [1]] as [Any]),
+                realm.create(CombineIdentifiableObject.self, value: [2, [2]] as [Any])
             )
         }
         XCTAssertEqual(obj1.child!.id, obj1.child!.id)
@@ -93,13 +93,13 @@ class ObjectIdentifiableTests: TestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class CombinePublisherTestCase: TestCase {
     var realm: Realm!
     var cancellable: AnyCancellable?
     var notificationToken: NotificationToken?
-    let subscribeOnQueue = DispatchQueue(label: "subscribe on")
-    let receiveOnQueue = DispatchQueue(label: "receive on")
+    let subscribeOnQueue = DispatchQueue(label: "subscribe on", qos: .userInteractive, autoreleaseFrequency: .workItem)
+    let receiveOnQueue = DispatchQueue(label: "receive on", qos: .userInteractive, autoreleaseFrequency: .workItem)
 
     override class var defaultTestSuite: XCTestSuite {
         if hasCombine() {
@@ -110,7 +110,7 @@ class CombinePublisherTestCase: TestCase {
 
     override func setUp() {
         super.setUp()
-        realm = try! Realm(configuration: Realm.Configuration(inMemoryIdentifier: "test"))
+        realm = try! Realm(configuration: Realm.Configuration(inMemoryIdentifier: "CombinePublisherTestCase"))
         XCTAssertTrue(realm.isEmpty)
     }
 
@@ -127,9 +127,23 @@ class CombinePublisherTestCase: TestCase {
         receiveOnQueue.sync { }
         super.tearDown()
     }
+
+    func watchForNotifierAdded() -> XCTestExpectation {
+        // .subscribe(on:) is asynchronous, so we need to wait for the notifier
+        // to be ready before we do the thing which should produce notifications
+        let ex = expectation(description: "added notifier")
+        subscribeOnQueue.sync {
+            let r = try! Realm(configuration: realm.configuration, queue: subscribeOnQueue)
+            RLMAddBeforeNotifyBlock(ObjectiveCSupport.convert(object: r)) {
+                _ = r // retain the Realm until the block is released
+                ex.fulfill()
+            }
+        }
+        return ex
+    }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class CombineRealmTests: CombinePublisherTestCase {
     func testWillChangeLocalWrite() {
         var called = false
@@ -140,7 +154,7 @@ class CombineRealmTests: CombinePublisherTestCase {
         }
 
         try! realm.write {
-            realm.create(SwiftIntObject.self, value: [])
+            realm.create(SwiftIntObject.self)
         }
         XCTAssertTrue(called)
     }
@@ -156,7 +170,7 @@ class CombineRealmTests: CombinePublisherTestCase {
         }
 
         try! realm.write {
-            realm.create(SwiftIntObject.self, value: [])
+            realm.create(SwiftIntObject.self)
         }
         XCTAssertNotNil(notificationToken)
         XCTAssertTrue(called)
@@ -174,7 +188,7 @@ class CombineRealmTests: CombinePublisherTestCase {
         XCTAssertNotNil(notificationToken)
         for _ in 0..<10 {
             try! realm.write(withoutNotifying: [notificationToken!]) {
-                realm.create(SwiftIntObject.self, value: [])
+                realm.create(SwiftIntObject.self)
             }
             XCTAssertFalse(called)
         }
@@ -188,7 +202,7 @@ class CombineRealmTests: CombinePublisherTestCase {
         subscribeOnQueue.async {
             let backgroundRealm = try! Realm(configuration: self.realm.configuration)
             try! backgroundRealm.write {
-                backgroundRealm.create(SwiftIntObject.self, value: [])
+                backgroundRealm.create(SwiftIntObject.self)
             }
         }
         wait(for: [exp], timeout: 1)
@@ -197,13 +211,13 @@ class CombineRealmTests: CombinePublisherTestCase {
 
 // MARK: - Object
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class CombineObjectPublisherTests: CombinePublisherTestCase {
     var obj: SwiftIntObject!
 
     override func setUp() {
         super.setUp()
-        obj = try! realm.write { realm.create(SwiftIntObject.self, value: []) }
+        obj = try! realm.write { realm.create(SwiftIntObject.self) }
     }
 
     func testWillChange() {
@@ -266,6 +280,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
     }
 
     func testSubscribeOn() {
+        let ex = watchForNotifierAdded()
         let sema = DispatchSemaphore(value: 0)
         var i = 1
         cancellable = valuePublisher(obj)
@@ -283,6 +298,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                 sema.signal()
             }
 
+        wait(for: [ex], timeout: 2.0)
         for _ in 0..<10 {
             try! realm.write { obj.intCol += 1 }
             // wait between each write so that the notifications can't get coalesced
@@ -321,6 +337,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
     }
 
     func testChangeSetSubscribeOn() {
+        let ex = watchForNotifierAdded()
         let sema = DispatchSemaphore(value: 0)
 
         var prev: SwiftIntObject?
@@ -347,6 +364,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                 }
             })
 
+        wait(for: [ex], timeout: 2.0)
         for _ in 0..<100 {
             try! realm.write { obj.intCol += 1 }
         }
@@ -362,6 +380,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
         let obj = try! realm.write { realm.create(SwiftObject.self, value: ["intCol": 0, "boolCol": false]) }
         let sema = DispatchSemaphore(value: 0)
 
+        let ex = watchForNotifierAdded()
         var prev: SwiftObject?
         cancellable = changesetPublisher(obj, keyPaths: ["intCol"])
             .subscribe(on: subscribeOnQueue)
@@ -385,6 +404,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                     XCTFail("Expected .change but got \(change)")
                 }
             })
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { obj.intCol += 1 }
@@ -440,6 +460,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
     func testChangeSetSubscribeOnAndReceiveOn() {
         let sema = DispatchSemaphore(value: 0)
 
+        let ex = watchForNotifierAdded()
         var prev: SwiftIntObject?
         cancellable = changesetPublisher(obj)
             .subscribe(on: subscribeOnQueue)
@@ -465,6 +486,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                     XCTFail("Expected .change but got \(change)")
                 }
             })
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { obj.intCol += 1 }
@@ -532,6 +554,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
 
     func testFrozenChangeSetSubscribeOn() {
         let sema = DispatchSemaphore(value: 0)
+        let ex = watchForNotifierAdded()
         cancellable = changesetPublisher(obj)
             .subscribe(on: subscribeOnQueue)
             .freeze()
@@ -556,6 +579,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                 }
                 sema.signal()
             }
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { obj.intCol += 1 }
@@ -598,6 +622,7 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
 
     func testFrozenChangeSetSubscribeOnAndReceiveOn() {
         let sema = DispatchSemaphore(value: 0)
+        let ex = watchForNotifierAdded()
         cancellable = changesetPublisher(obj)
             .subscribe(on: subscribeOnQueue)
             .freeze()
@@ -622,7 +647,8 @@ class CombineObjectPublisherTests: CombinePublisherTestCase {
                     prev = obj
                 }
                 sema.signal()
-        }
+            }
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { obj.intCol += 1 }
@@ -759,7 +785,7 @@ private protocol CombineTestCollection {
 
 // MARK: - List, MutableSet
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 private class CombineCollectionPublisherTests<Collection: RealmCollection>: CombinePublisherTestCase
         where Collection: CombineTestCollection, Collection: RealmSubscribable {
     var collection: Collection!
@@ -1371,7 +1397,7 @@ extension Results: CombineTestCollection where Element == ModernAllTypesObject {
     }
 
     func appendObject() {
-        realm?.create(Element.self, value: [])
+        realm?.create(Element.self)
     }
 
     func modifyObject() {
@@ -1387,7 +1413,7 @@ extension Results: CombineTestCollection where Element == ModernAllTypesObject {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class ResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineCollectionPublisherTests<Results<ModernAllTypesObject>>.testSuite("Results")
@@ -1396,11 +1422,11 @@ class ResultsPublisherTests: TestCase {
 
 extension List: CombineTestCollection where Element == ModernAllTypesObject {
     static func getCollection(_ realm: Realm) -> List<Element> {
-        return try! realm.write { realm.create(ModernAllTypesObject.self, value: []).arrayCol }
+        return try! realm.write { realm.create(ModernAllTypesObject.self).arrayCol }
     }
 
     func appendObject() {
-        append(realm!.create(Element.self, value: []))
+        append(realm!.create(Element.self))
     }
 
     func modifyObject() {
@@ -1417,7 +1443,7 @@ extension List: CombineTestCollection where Element == ModernAllTypesObject {
 }
 
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class ManagedListPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineCollectionPublisherTests<List<ModernAllTypesObject>>.testSuite("List")
@@ -1426,11 +1452,11 @@ class ManagedListPublisherTests: TestCase {
 
 extension MutableSet: CombineTestCollection where Element == ModernAllTypesObject {
     static func getCollection(_ realm: Realm) -> MutableSet<Element> {
-        return try! realm.write { realm.create(ModernAllTypesObject.self, value: []).setCol }
+        return try! realm.write { realm.create(ModernAllTypesObject.self).setCol }
     }
 
     func appendObject() {
-        insert(realm!.create(Element.self, value: []))
+        insert(realm!.create(Element.self))
     }
 
     func modifyObject() {
@@ -1446,7 +1472,7 @@ extension MutableSet: CombineTestCollection where Element == ModernAllTypesObjec
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class ManagedMutableSetPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineCollectionPublisherTests<MutableSet<ModernAllTypesObject>>.testSuite("MutableSet")
@@ -1455,7 +1481,7 @@ class ManagedMutableSetPublisherTests: TestCase {
 
 extension LinkingObjects: CombineTestCollection where Element == ModernAllTypesObject {
     static func getCollection(_ realm: Realm) -> LinkingObjects<Element> {
-        return try! realm.write { realm.create(ModernAllTypesObject.self, value: []).linkingObjects }
+        return try! realm.write { realm.create(ModernAllTypesObject.self).linkingObjects }
     }
 
     func appendObject() {
@@ -1478,7 +1504,7 @@ extension LinkingObjects: CombineTestCollection where Element == ModernAllTypesO
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class LinkingObjectsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineCollectionPublisherTests<LinkingObjects<ModernAllTypesObject>>.testSuite("LinkingObjects")
@@ -1491,7 +1517,7 @@ extension AnyRealmCollection: CombineTestCollection where Element == ModernAllTy
     }
 
     func appendObject() {
-        realm?.create(Element.self, value: [])
+        realm?.create(Element.self)
     }
 
     func modifyObject() {
@@ -1507,7 +1533,7 @@ extension AnyRealmCollection: CombineTestCollection where Element == ModernAllTy
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class AnyRealmCollectionPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineCollectionPublisherTests<AnyRealmCollection<ModernAllTypesObject>>.testSuite("AnyRealmCollection")
@@ -1516,7 +1542,7 @@ class AnyRealmCollectionPublisherTests: TestCase {
 
 // MARK: - Map
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 private class CombineMapPublisherTests<Collection: RealmKeyedCollection>: CombinePublisherTestCase
         where Collection: CombineTestCollection, Collection: RealmSubscribable {
     var collection: Collection!
@@ -2123,12 +2149,12 @@ private class CombineMapPublisherTests<Collection: RealmKeyedCollection>: Combin
 
 extension Map: CombineTestCollection where Key == String, Value == SwiftObject? {
     static func getCollection(_ realm: Realm) -> Map<Key, Value> {
-        return try! realm.write { realm.create(SwiftMapPropertyObject.self, value: []).swiftObjectMap }
+        return try! realm.write { realm.create(SwiftMapPropertyObject.self).swiftObjectMap }
     }
 
     func appendObject() {
         let key = UUID().uuidString
-        self[key] = realm!.create(SwiftObject.self, value: [])
+        self[key] = realm!.create(SwiftObject.self)
     }
 
     func modifyObject() {
@@ -2144,7 +2170,7 @@ extension Map: CombineTestCollection where Key == String, Value == SwiftObject? 
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class ManagedMapPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
         return CombineMapPublisherTests<Map<String, SwiftObject?>>.testSuite("Map")
@@ -2162,7 +2188,7 @@ extension ModernAllTypesObject: RealmSectionedObject {
     var key: Int8 { int8Col } // This property will never change.
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 private class CombineSectionedResultsPublisherTests<Collection: RealmCollection>: CombinePublisherTestCase
     where Collection: CombineTestCollection, Collection: RealmSubscribable, Collection.Element: RealmSectionedObject {
     var collection: Collection!
@@ -2313,7 +2339,7 @@ private class CombineSectionedResultsPublisherTests<Collection: RealmCollection>
     }
 
     func checkChangeset<SectionedResults: RealmSectionedResult>(
-            _ change: RealmSectionedResultsChange<SectionedResults>,
+            _ change: SectionedResultsChange<SectionedResults>,
             insertions: [IndexPath] = [], deletions: [IndexPath] = [], frozen: Bool = false) {
         switch change {
         case .initial(let collection):
@@ -3364,7 +3390,7 @@ private class CombineSectionedResultsPublisherTests<Collection: RealmCollection>
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 // swiftlint:disable:next type_name
 class ResultsWithSectionedResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -3372,7 +3398,7 @@ class ResultsWithSectionedResultsPublisherTests: TestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 // swiftlint:disable:next type_name
 class ManagedListSectionedResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -3380,7 +3406,7 @@ class ManagedListSectionedResultsPublisherTests: TestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 // swiftlint:disable:next type_name
 class ManagedMutableSetSectionedResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -3388,7 +3414,7 @@ class ManagedMutableSetSectionedResultsPublisherTests: TestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 // swiftlint:disable:next type_name
 class LinkingObjectsSectionedResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -3396,7 +3422,7 @@ class LinkingObjectsSectionedResultsPublisherTests: TestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 // swiftlint:disable:next type_name
 class AnyRealmCollectionSectionedResultsPublisherTests: TestCase {
     override class var defaultTestSuite: XCTestSuite {
@@ -3406,20 +3432,20 @@ class AnyRealmCollectionSectionedResultsPublisherTests: TestCase {
 
 // MARK: - Projection
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 extension SimpleObject: ObjectKeyIdentifiable {
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 extension SimpleProjection: ObjectKeyIdentifiable {
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 public final class AltSimpleProjection: Projection<SimpleObject>, ObjectKeyIdentifiable {
     @Projected(\SimpleObject.int) var int
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class CombineProjectionPublisherTests: CombinePublisherTestCase {
 
     var object: SimpleObject!
@@ -3497,6 +3523,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     }
 
     func testSubscribeOn() {
+        let ex = watchForNotifierAdded()
         let sema = DispatchSemaphore(value: 0)
         var i = 1
         cancellable = valuePublisher(projection)
@@ -3513,6 +3540,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                 XCTAssertEqual(arr.count, 10)
                 sema.signal()
             }
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<10 {
             try! realm.write { object.int += 1 }
@@ -3554,6 +3582,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     func testChangeSetSubscribeOn() {
         let sema = DispatchSemaphore(value: 0)
 
+        let ex = watchForNotifierAdded()
         var prevProj: SimpleProjection?
         cancellable = changesetPublisher(projection)
             .subscribe(on: subscribeOnQueue)
@@ -3577,6 +3606,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                     XCTFail("Expected .change but got \(change)")
                 }
             })
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { object.int += 1 }
@@ -3592,6 +3622,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     func testChangeSetSubscribeOnKeyPath() {
         let sema = DispatchSemaphore(value: 0)
 
+        let ex = watchForNotifierAdded()
         var prevProj: SimpleProjection?
         cancellable = changesetPublisher(projection, keyPaths: ["int"])
             .subscribe(on: subscribeOnQueue)
@@ -3615,6 +3646,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                     XCTFail("Expected .change but got \(change)")
                 }
             })
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { object.int += 1 }
@@ -3670,6 +3702,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     func testChangeSetSubscribeOnAndReceiveOn() {
         let sema = DispatchSemaphore(value: 0)
 
+        let ex = watchForNotifierAdded()
         var prev: SimpleProjection?
         cancellable = changesetPublisher(projection)
             .subscribe(on: subscribeOnQueue)
@@ -3695,6 +3728,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                     XCTFail("Expected .change but got \(change)")
                 }
             })
+        wait(for: [ex], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { object.int += 1 }
@@ -3760,23 +3794,38 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
         wait(for: [exp], timeout: 1)
     }
 
-    @available(iOS 14.0, macOS 11.0, tvOS 14.0, watchOS 7.0, *)
     func testFrozenPublisherSubscribeOn() {
-        let exp = XCTestExpectation()
-        cancellable = projection.publisher
-            .threadSafeReference()
-            .receive(on: subscribeOnQueue)
+        let setupEx = watchForNotifierAdded()
+        let completeEx = expectation(description: "pipeline complete")
+        var gotValueEx: XCTestExpectation!
+        cancellable = valuePublisher(projection)
+            .subscribe(on: subscribeOnQueue)
             .freeze()
-            .assertNoFailure()
-            .sink { change in
-                print(change)
-                exp.fulfill()
+            .map { (v: SimpleProjection) -> SimpleProjection in
+                gotValueEx.fulfill()
+                return v
             }
-        try! realm.write { object.int += 1 }
-        wait(for: [exp], timeout: 1)
+            .collect()
+            .assertNoFailure()
+            .sink { arr in
+                XCTAssertEqual(arr.count, 10)
+                for i in 0..<10 {
+                    XCTAssertEqual(arr[i].int, i + 1)
+                }
+                completeEx.fulfill()
+            }
+        wait(for: [setupEx], timeout: 2.0)
+        for _ in 0..<10 {
+            gotValueEx = expectation(description: "got value")
+            try! realm.write { object.int += 1 }
+            wait(for: [gotValueEx], timeout: 2.0)
+        }
+        try! realm.write { realm.delete(object) }
+        wait(for: [completeEx], timeout: 1)
     }
 
     func testFrozenChangeSetSubscribeOn() {
+        let setupEx = watchForNotifierAdded()
         let sema = DispatchSemaphore(value: 0)
         cancellable = changesetPublisher(projection)
             .subscribe(on: subscribeOnQueue)
@@ -3786,7 +3835,6 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
             .sink { arr in
                 var prev: SimpleProjection?
                 for change in arr {
-                    print(change)
                     guard case .change(let p, let properties) = change else {
                         XCTFail("Expected .change but got \(change)")
                         sema.signal()
@@ -3803,6 +3851,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                 }
                 sema.signal()
             }
+        wait(for: [setupEx], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { object.int += 1 }
@@ -3844,6 +3893,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     }
 
     func testFrozenChangeSetSubscribeOnAndReceiveOn() {
+        let setupEx = watchForNotifierAdded()
         let sema = DispatchSemaphore(value: 0)
         cancellable = changesetPublisher(projection)
             .subscribe(on: subscribeOnQueue)
@@ -3869,7 +3919,8 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
                     prev = p
                 }
                 sema.signal()
-        }
+            }
+        wait(for: [setupEx], timeout: 2.0)
 
         for _ in 0..<100 {
             try! realm.write { object.int += 1 }
@@ -4028,7 +4079,7 @@ class CombineProjectionPublisherTests: CombinePublisherTestCase {
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, *)
+@available(macOS 10.15, iOS 13.0, watchOS 6.0, tvOS 13.0, *)
 class CombineAsyncRealmTests: CombinePublisherTestCase {
     func testWillChangeLocalWrite() {
         let asyncWriteExpectation = expectation(description: "Should complete async write")
@@ -4037,7 +4088,7 @@ class CombineAsyncRealmTests: CombinePublisherTestCase {
             }
 
         realm.writeAsync {
-            self.realm.create(SwiftIntObject.self, value: [])
+            self.realm.create(SwiftIntObject.self)
         }
         waitForExpectations(timeout: 1, handler: nil)
     }
@@ -4050,10 +4101,9 @@ class CombineAsyncRealmTests: CombinePublisherTestCase {
         queue.async {
             let realm = try! Realm(configuration: self.realm.configuration, queue: self.queue)
             realm.writeAsync {
-                realm.create(SwiftIntObject.self, value: [])
+                realm.create(SwiftIntObject.self)
             }
         }
         wait(for: [exp], timeout: 3)
     }
 }
-#endif // canImport(Combine)

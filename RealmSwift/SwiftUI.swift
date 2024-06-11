@@ -18,13 +18,12 @@
 
 import Foundation
 
-#if !(os(iOS) && (arch(i386) || arch(arm)))
 import SwiftUI
 import Combine
 import Realm
 import Realm.Private
 
-private func safeWrite<Value>(_ value: Value, _ block: (Value) -> Void) where Value: ThreadConfined {
+private func write<Value>(_ value: Value, _ block: (Value) -> Void) where Value: ThreadConfined {
     let thawed = value.realm == nil ? value : value.thaw() ?? value
     if let realm = thawed.realm, !realm.isInWriteTransaction {
         try! realm.write {
@@ -57,7 +56,7 @@ private func createBinding<T: ThreadConfined, V>(
         return lastValue
     }, set: { newValue in
         guard !value.isInvalidated else { return }
-        safeWrite(value) { value in
+        write(value) { value in
             value[keyPath: keyPath] = newValue
         }
     })
@@ -82,7 +81,7 @@ private func createCollectionBinding<T: ThreadConfined, V: RLMSwiftCollectionBas
         return lastValue
     }, set: { newValue in
         guard !value.isInvalidated else { return }
-        safeWrite(value) { value in
+        write(value) { value in
             value[keyPath: keyPath] = newValue
         }
     })
@@ -105,7 +104,7 @@ private func createEquatableBinding<T: ThreadConfined, V: Equatable>(
     }, set: { newValue in
         guard !value.isInvalidated else { return }
         guard value[keyPath: keyPath] != newValue else { return }
-        safeWrite(value) { value in
+        write(value) { value in
             value[keyPath: keyPath] = newValue
         }
     })
@@ -118,9 +117,22 @@ private func createEquatableBinding<T: ThreadConfined, V: Equatable>(
     /// Objects must have observers removed before being added to a realm.
     /// They are stored here so that if they are appended through the Bound Property
     /// system, they can be de-observed before hand.
-    fileprivate static var observedObjects = [NSObject: SwiftUIKVO.Subscription]()
+    private static let observedObjects = AllocatedUnfairLock([NSObject: Subscription]())
 
-    @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+    static func store(_ obj: NSObject, _ subscription: Subscription) {
+        SwiftUIKVO.observedObjects.withLock {
+            $0[obj] = subscription
+        }
+    }
+
+    static func cancel(_ obj: NSObject) {
+        SwiftUIKVO.observedObjects.withLock {
+            if let subscription: Subscription = $0.removeValue(forKey: obj) {
+                subscription.removeObservers()
+            }
+        }
+    }
+
     struct Subscription: Combine.Subscription {
         let observer: NSObject
         let value: NSObject
@@ -134,23 +146,16 @@ private func createEquatableBinding<T: ThreadConfined, V: Equatable>(
         }
 
         func cancel() {
-            removeObservers()
-            SwiftUIKVO.observedObjects.removeValue(forKey: value)
+            SwiftUIKVO.cancel(value)
         }
 
         fileprivate func removeObservers() {
-            guard SwiftUIKVO.observedObjects.keys.contains(value) else {
-                return
-            }
             keyPaths.forEach {
                 value.removeObserver(observer, forKeyPath: $0)
             }
         }
 
         fileprivate func addObservers() {
-            guard SwiftUIKVO.observedObjects.keys.contains(value) else {
-                return
-            }
             keyPaths.forEach {
                 value.addObserver(observer, forKeyPath: $0, options: .init(), context: nil)
             }
@@ -178,7 +183,7 @@ private final class ObservableStoragePublisher<ObjectType>: Publisher where Obje
     public typealias Failure = Never
 
     var subscribers = [AnySubscriber<Void, Never>]()
-    private let value: ObjectType
+    private var value: ObjectType
     private let keyPaths: [String]?
     private let unwrappedValue: ObjectBase?
 
@@ -198,6 +203,11 @@ private final class ObservableStoragePublisher<ObjectType>: Publisher where Obje
         self.value = value
         self.keyPaths = keyPaths
         self.unwrappedValue = value.rootObject
+    }
+
+    // Refresh the publisher with a managed object.
+    func update(value: ObjectType) {
+        self.value = value
     }
 
     func send() {
@@ -225,7 +235,7 @@ private final class ObservableStoragePublisher<ObjectType>: Publisher where Obje
             }
             let subscription = SwiftUIKVO.Subscription(observer: kvo, value: value, keyPaths: keyPaths)
             subscriber.receive(subscription: subscription)
-            SwiftUIKVO.observedObjects[value] = subscription
+            SwiftUIKVO.store(value, subscription)
         }
     }
 }
@@ -235,16 +245,17 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
     @Published var value: ObservedType {
         willSet {
             if newValue != value {
+                objectWillChange.send()
+                objectWillChange.update(value: newValue)
                 objectWillChange.subscribers.forEach {
                     $0.receive(subscription: ObservationSubscription(token: newValue._observe(keyPaths, $0)))
                 }
-                objectWillChange.send()
             }
         }
     }
 
-    var objectWillChange: ObservableStoragePublisher<ObservedType>
-    var keyPaths: [String]?
+    let objectWillChange: ObservableStoragePublisher<ObservedType>
+    let keyPaths: [String]?
 
     init(_ value: ObservedType, _ keyPaths: [String]? = nil) {
         self.value = value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value
@@ -262,6 +273,61 @@ private class ObservableStorage<ObservedType>: ObservableObject where ObservedTy
         self.value = value.realm != nil && !value.isInvalidated ? value.thaw() ?? value : value
         self.objectWillChange = ObservableStoragePublisher(value, keyPaths)
         self.keyPaths = keyPaths
+    }
+}
+
+@available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+private class ObservableResultsStorage<T>: ObservableStorage<T> where T: RealmSubscribable & ThreadConfined & Equatable {
+    private var setupHasRun = false
+    func didSet() {
+        if setupHasRun {
+            updateValue()
+        }
+    }
+
+    func updateValue() {
+        // Implemented in subclasses
+        fatalError()
+    }
+
+    func setupValue() {
+        guard !setupHasRun else { return }
+        updateValue()
+        setupHasRun = true
+    }
+
+    var sortDescriptor: SortDescriptor? {
+        didSet {
+            didSet()
+        }
+    }
+
+    var filter: NSPredicate? {
+        didSet {
+            didSet()
+        }
+    }
+    var configuration: Realm.Configuration? {
+        didSet {
+            didSet()
+        }
+    }
+
+    var searchFilter: NSPredicate? {
+        didSet {
+            didSet()
+        }
+    }
+
+    private var searchString: String = ""
+    fileprivate func searchText<U: ObjectBase>(_ text: String, on keyPath: KeyPath<U, String>) {
+        guard text != searchString else { return }
+        if text.isEmpty {
+            searchFilter = nil
+        } else {
+            searchFilter = Query<U>()[dynamicMember: keyPath].contains(text).predicate
+        }
+        searchString = text
     }
 }
 
@@ -421,90 +487,41 @@ extension Projection: _ObservedResultsValue { }
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
 @propertyWrapper public struct ObservedResults<ResultType>: DynamicProperty, BoundCollection where ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
     public typealias Element = ResultType
-    private class Storage: ObservableStorage<Results<ResultType>> {
-        var setupHasRun = false
-        private func didSet() {
-            if setupHasRun {
-                setupValue()
-            }
-        }
-
-        func setupValue() {
-            /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
+    private class Storage: ObservableResultsStorage<Results<ResultType>> {
+        override func updateValue() {
             let realm = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration)
-            value = realm.objects(ResultType.self)
+            var value = realm.objects(ResultType.self)
             if let sortDescriptor = sortDescriptor {
                 value = value.sorted(byKeyPath: sortDescriptor.keyPath, ascending: sortDescriptor.ascending)
             }
 
-            let filters = [searchFilter, filter ?? `where`].compactMap { $0 }
+            let filters = [searchFilter, filter].compactMap { $0 }
             if !filters.isEmpty {
                 let compoundFilter = NSCompoundPredicate(andPredicateWithSubpredicates: filters)
                 value = value.filter(compoundFilter)
             }
-            setupHasRun = true
-        }
-
-        var sortDescriptor: SortDescriptor? {
-            didSet {
-                didSet()
-            }
-        }
-
-        var filter: NSPredicate? {
-            didSet {
-                didSet()
-            }
-        }
-        var `where`: NSPredicate? {
-            didSet {
-                didSet()
-            }
-        }
-        var configuration: Realm.Configuration? {
-            didSet {
-                didSet()
-            }
-        }
-
-        var searchString: String = ""
-        var searchFilter: NSPredicate? {
-            didSet {
-                didSet()
-            }
+            self.value = value
         }
     }
 
     @Environment(\.realmConfiguration) var configuration
     @ObservedObject private var storage: Storage
-    /// :nodoc:
     fileprivate func searchText<T: ObjectBase>(_ text: String, on keyPath: KeyPath<T, String>) {
-        if text.isEmpty {
-            if storage.searchFilter != nil {
-                storage.searchFilter = nil
-            }
-        } else if text != storage.searchString {
-            storage.searchFilter = Query<T>()[dynamicMember: keyPath].contains(text).predicate
-        }
-        storage.searchString = text
+        storage.searchText(text, on: keyPath)
     }
+
     /// Stores an NSPredicate used for filtering the Results. This is mutually exclusive
     /// to the `where` parameter.
     @State public var filter: NSPredicate? {
         willSet {
-            storage.where = nil
             storage.filter = newValue
         }
     }
     /// Stores a type safe query used for filtering the Results. This is mutually exclusive
     /// to the `filter` parameter.
     @State public var `where`: ((Query<ResultType>) -> Query<Bool>)? {
-        // The introduction of this property produces a compiler bug in
-        // Xcode 12.5.1. So Swift Queries are supported on Xcode 13 and above
-        // when used with SwiftUI.
         willSet {
-            storage.filter = nil
-            storage.where = newValue?(Query()).predicate
+            storage.filter = newValue?(Query()).predicate
         }
     }
     /// :nodoc:
@@ -515,9 +532,7 @@ extension Projection: _ObservedResultsValue { }
     }
     /// :nodoc:
     public var wrappedValue: Results<ResultType> {
-        if !storage.setupHasRun {
-            storage.setupValue()
-        }
+        storage.setupValue()
         return storage.configuration != nil ? storage.value.freeze() : storage.value
     }
     /// :nodoc:
@@ -605,11 +620,13 @@ extension Projection: _ObservedResultsValue { }
         self.sortDescriptor = sortDescriptor
     }
 
-    public mutating func update() {
-        // When the view updates, it will inject the @Environment
-        // into the propertyWrapper
-        if storage.configuration == nil {
-            storage.configuration = configuration
+    nonisolated public func update() {
+        assumeOnMainActorExecutor {
+            // When the view updates, it will inject the @Environment
+            // into the propertyWrapper
+            if storage.configuration == nil {
+                storage.configuration = configuration
+            }
         }
     }
 }
@@ -627,20 +644,12 @@ extension Projection: _ObservedResultsValue { }
 @propertyWrapper public struct ObservedSectionedResults<Key: _Persistable & Hashable, ResultType>: DynamicProperty, BoundCollection where ResultType: _ObservedResultsValue & RealmFetchable & KeypathSortable & Identifiable {
     public typealias Element = ResultType
 
-    private class Storage: ObservableStorage<SectionedResults<Key, ResultType>> {
-        var setupHasRun = false
-        private func didSet() {
-            if setupHasRun {
-                setupValue()
-            }
-        }
-
-        func setupValue() {
-            /// A base value to reset the state of the query if a user reassigns the `filter` or `sortDescriptor`
+    private class Storage: ObservableResultsStorage<SectionedResults<Key, ResultType>> {
+        override func updateValue() {
             let realm = try! Realm(configuration: configuration ?? Realm.Configuration.defaultConfiguration)
             var results = realm.objects(ResultType.self)
 
-            let filters = [searchFilter, filter ?? `where`].compactMap { $0 }
+            let filters = [searchFilter, filter].compactMap { $0 }
             if !filters.isEmpty {
                 let compoundFilter = NSCompoundPredicate(andPredicateWithSubpredicates: filters)
                 results = results.filter(compoundFilter)
@@ -651,8 +660,6 @@ extension Projection: _ObservedResultsValue { }
             }
 
             value = results.sectioned(sortDescriptors: sortDescriptors, sectionBlock)
-
-            setupHasRun = true
         }
 
         var sortDescriptors: [SortDescriptor] = [] {
@@ -660,30 +667,6 @@ extension Projection: _ObservedResultsValue { }
                 didSet()
             }
         }
-
-        var filter: NSPredicate? {
-            didSet {
-                didSet()
-            }
-        }
-        var `where`: NSPredicate? {
-            didSet {
-                didSet()
-            }
-        }
-        var configuration: Realm.Configuration? {
-            didSet {
-                didSet()
-            }
-        }
-
-        var searchString: String = ""
-        var searchFilter: NSPredicate? {
-            didSet {
-                didSet()
-            }
-        }
-
         var sectionBlock: ((ResultType) -> Key)
         var keyPathString: String?
 
@@ -691,7 +674,7 @@ extension Projection: _ObservedResultsValue { }
              sectionBlock: @escaping ((ResultType) -> Key),
              sortDescriptors: [SortDescriptor],
              keyPathString: String? = nil,
-             keyPaths: [String]? = nil) where ResultType: ObjectBase {
+             keyPaths: [String]? = nil) {
             self.sectionBlock = sectionBlock
             self.sortDescriptors = sortDescriptors
             if let keyPathString = keyPathString {
@@ -701,24 +684,7 @@ extension Projection: _ObservedResultsValue { }
             if self.sortDescriptors.isEmpty {
                 throwRealmException("sortDescriptors must not be empty when sectioning ObservedSectionedResults with `sectionBlock`")
             }
-            super.init(value.sectioned(by: self.sectionBlock, sortDescriptors: self.sortDescriptors), keyPaths)
-        }
-
-        init<BoxedType: ObjectBase>(_ value: Results<ResultType>,
-                                    sectionBlock: @escaping ((ResultType) -> Key),
-                                    sortDescriptors: [SortDescriptor],
-                                    keyPathString: String? = nil,
-                                    keyPaths: [String]? = nil) where ResultType: Projection<BoxedType> {
-            self.sectionBlock = sectionBlock
-            self.sortDescriptors = sortDescriptors
-            if let keyPathString = keyPathString {
-                self.keyPathString = keyPathString
-                self.sortDescriptors.append(.init(keyPath: keyPathString, ascending: true))
-            }
-            if self.sortDescriptors.isEmpty {
-                throwRealmException("sortDescriptors must not be empty when sectioning ObservedSectionedResults with `sectionBlock`")
-            }
-            super.init(value.sectioned(by: self.sectionBlock, sortDescriptors: self.sortDescriptors), keyPaths)
+            super.init(value.sectioned(sortDescriptors: self.sortDescriptors, self.sectionBlock), keyPaths)
         }
     }
 
@@ -726,32 +692,20 @@ extension Projection: _ObservedResultsValue { }
     @ObservedObject private var storage: Storage
     /// :nodoc:
     fileprivate func searchText<T: ObjectBase>(_ text: String, on keyPath: KeyPath<T, String>) {
-        if text.isEmpty {
-            if storage.searchFilter != nil {
-                storage.searchFilter = nil
-            }
-        } else if text != storage.searchString {
-            storage.searchFilter = Query<T>()[dynamicMember: keyPath].contains(text).predicate
-        }
-        storage.searchString = text
+        storage.searchText(text, on: keyPath)
     }
     /// Stores an NSPredicate used for filtering the SectionedResults. This is mutually exclusive
     /// to the `where` parameter.
     @State public var filter: NSPredicate? {
         willSet {
-            storage.where = nil
             storage.filter = newValue
         }
     }
     /// Stores a type safe query used for filtering the SectionedResults. This is mutually exclusive
     /// to the `filter` parameter.
     @State public var `where`: ((Query<ResultType>) -> Query<Bool>)? {
-        // The introduction of this property produces a compiler bug in
-        // Xcode 12.5.1. So Swift Queries are supported on Xcode 13 and above
-        // when used with SwiftUI.
         willSet {
-            storage.filter = nil
-            storage.where = newValue?(Query()).predicate
+            storage.filter = newValue?(Query()).predicate
         }
     }
     /// :nodoc:
@@ -762,32 +716,12 @@ extension Projection: _ObservedResultsValue { }
     }
     /// :nodoc:
     public var wrappedValue: SectionedResults<Key, ResultType> {
-        if !storage.setupHasRun {
-            storage.setupValue()
-        }
+        storage.setupValue()
         return storage.value
     }
     /// :nodoc:
     public var projectedValue: Self {
         return self
-    }
-
-    private init<ObjectType: ObjectBase>(type: ResultType.Type,
-                                         sectionBlock: @escaping ((ResultType) -> Key),
-                                         sortDescriptors: [SortDescriptor] = [],
-                                         filter: NSPredicate? = nil,
-                                         keyPaths: [String]? = nil,
-                                         keyPathString: String? = nil,
-                                         configuration: Realm.Configuration? = nil) where ResultType: Projection<ObjectType>, ObjectType: ThreadConfined {
-        let results = Results<ResultType>(RLMResults<ResultType>.emptyDetached())
-        self.storage = Storage(results,
-                               sectionBlock: sectionBlock,
-                               sortDescriptors: sortDescriptors,
-                               keyPathString: keyPathString,
-                               keyPaths: keyPaths)
-        self.storage.configuration = configuration
-        self.filter = filter
-        self.sortDescriptors = sortDescriptors
     }
 
     private init(type: ResultType.Type,
@@ -797,7 +731,7 @@ extension Projection: _ObservedResultsValue { }
                  where: ((Query<ResultType>) -> Query<Bool>)? = nil,
                  keyPaths: [String]? = nil,
                  keyPathString: String? = nil,
-                 configuration: Realm.Configuration? = nil) where ResultType: Object {
+                 configuration: Realm.Configuration? = nil) where ResultType: AnyObject {
         let results = Results<ResultType>(RLMResults<ResultType>.emptyDetached())
         self.storage = Storage(results,
                                sectionBlock: sectionBlock,
@@ -1045,11 +979,13 @@ extension Projection: _ObservedResultsValue { }
                   configuration: configuration)
     }
 
-    public mutating func update() {
-        // When the view updates, it will inject the @Environment
-        // into the propertyWrapper
-        if storage.configuration == nil {
-            storage.configuration = configuration
+    nonisolated public func update() {
+        assumeOnMainActorExecutor {
+            // When the view updates, it will inject the @Environment
+            // into the propertyWrapper
+            if storage.configuration == nil {
+                storage.configuration = configuration
+            }
         }
     }
 }
@@ -1167,6 +1103,7 @@ extension Binding where Value: ObjectBase & ThreadConfined {
 
 /// :nodoc:
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+@preconcurrency @MainActor
 public protocol BoundCollection {
     /// :nodoc:
     associatedtype Value
@@ -1175,6 +1112,13 @@ public protocol BoundCollection {
 
     /// :nodoc:
     var wrappedValue: Value { get }
+}
+
+@available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
+extension BoundCollection {
+    private func write(_ block: (Value) -> Void) where Value: ThreadConfined {
+        RealmSwift.write(wrappedValue, block)
+    }
 }
 
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
@@ -1191,28 +1135,28 @@ public extension BoundCollection where Value: RealmCollection {
 public extension BoundCollection where Value == List<Element> {
     /// :nodoc:
     func remove(at index: Index) {
-        safeWrite(self.wrappedValue) { list in
+        write { list in
             list.remove(at: index)
         }
     }
 
     /// :nodoc:
     func remove(atOffsets offsets: IndexSet) {
-        safeWrite(self.wrappedValue) { list in
+        write { list in
             list.remove(atOffsets: offsets)
         }
     }
 
     /// :nodoc:
     func move(fromOffsets offsets: IndexSet, toOffset destination: Int) {
-        safeWrite(self.wrappedValue) { list in
+        write { list in
             list.move(fromOffsets: offsets, toOffset: destination)
         }
     }
 
     /// :nodoc:
     func append(_ value: Value.Element) {
-        safeWrite(self.wrappedValue) { list in
+        write { list in
             list.append(value)
         }
     }
@@ -1222,11 +1166,10 @@ public extension BoundCollection where Value == List<Element> {
 public extension BoundCollection where Value == List<Element>, Element: ObjectBase & ThreadConfined {
     /// :nodoc:
     func append(_ value: Value.Element) {
-        // if the value is unmanaged but the list is managed, we are adding this value to the realm
-        if value.realm == nil && self.wrappedValue.realm != nil {
-            SwiftUIKVO.observedObjects[value]?.cancel()
-        }
-        safeWrite(self.wrappedValue) { list in
+        write { list in
+            if value.realm == nil && list.realm != nil {
+                SwiftUIKVO.cancel(value)
+            }
             list.append(thawObjectIfFrozen(value))
         }
     }
@@ -1236,17 +1179,16 @@ public extension BoundCollection where Value == List<Element>, Element: ObjectBa
 public extension BoundCollection where Value == Results<Element>, Element: ObjectBase & ThreadConfined {
     /// :nodoc:
     func remove(_ object: Value.Element) {
-        guard let thawed = object.thaw(),
-              let index = wrappedValue.thaw()?.index(of: thawed) else {
-            return
-        }
-        safeWrite(self.wrappedValue) { results in
-            results.realm?.delete(results[index])
+        guard let thawed = object.thaw() else { return }
+        write { results in
+            if results.index(of: thawed) != nil {
+                results.realm?.delete(thawed)
+            }
         }
     }
     /// :nodoc:
     func remove(atOffsets offsets: IndexSet) {
-        safeWrite(self.wrappedValue) { results in
+        write { results in
             results.realm?.delete(Array(offsets.map { results[$0] }))
         }
     }
@@ -1256,13 +1198,13 @@ public extension BoundCollection where Value == Results<Element>, Element: Objec
 public extension BoundCollection where Value == MutableSet<Element> {
     /// :nodoc:
     func remove(_ element: Value.Element) {
-        safeWrite(self.wrappedValue) { mutableSet in
+        write { mutableSet in
             mutableSet.remove(element)
         }
     }
     /// :nodoc:
     func insert(_ value: Value.Element) {
-        safeWrite(self.wrappedValue) { mutableSet in
+        write { mutableSet in
             mutableSet.insert(value)
         }
     }
@@ -1272,17 +1214,16 @@ public extension BoundCollection where Value == MutableSet<Element> {
 public extension BoundCollection where Value == MutableSet<Element>, Element: ObjectBase & ThreadConfined {
     /// :nodoc:
     func remove(_ object: Value.Element) {
-        safeWrite(self.wrappedValue) { mutableSet in
+        write { mutableSet in
             mutableSet.remove(thawObjectIfFrozen(object))
         }
     }
     /// :nodoc:
     func insert(_ value: Value.Element) {
-        // if the value is unmanaged but the set is managed, we are adding this value to the realm
-        if value.realm == nil && self.wrappedValue.realm != nil {
-            SwiftUIKVO.observedObjects[value]?.cancel()
-        }
-        safeWrite(self.wrappedValue) { mutableSet in
+        write { mutableSet in
+            if value.realm == nil && mutableSet.realm != nil {
+                SwiftUIKVO.cancel(value)
+            }
             mutableSet.insert(thawObjectIfFrozen(value))
         }
     }
@@ -1292,10 +1233,10 @@ public extension BoundCollection where Value == MutableSet<Element>, Element: Ob
 public extension BoundCollection where Value == Results<Element>, Element: Object {
     /// :nodoc:
     func append(_ value: Value.Element) {
-        if value.realm == nil && self.wrappedValue.realm != nil {
-            SwiftUIKVO.observedObjects[value]?.cancel()
-        }
-        safeWrite(self.wrappedValue) { results in
+        write { results in
+            if value.realm == nil && results.realm != nil {
+                SwiftUIKVO.cancel(value)
+            }
             results.realm?.add(thawObjectIfFrozen(value))
         }
     }
@@ -1305,10 +1246,10 @@ public extension BoundCollection where Value == Results<Element>, Element: Objec
 public extension BoundCollection where Value == Results<Element>, Element: ProjectionObservable & ThreadConfined, Element.Root: Object {
     /// :nodoc:
     func append(_ value: Value.Element) {
-        if value.realm == nil && self.wrappedValue.realm != nil {
-            SwiftUIKVO.observedObjects[value.rootObject]?.cancel()
-        }
-        safeWrite(self.wrappedValue) { results in
+        write { results in
+            if value.realm == nil && results.realm != nil {
+                SwiftUIKVO.cancel(value.rootObject)
+            }
             results.realm?.add(thawObjectIfFrozen(value.rootObject))
         }
     }
@@ -1348,7 +1289,7 @@ public extension BoundMap {
 
     /// :nodoc:
     func set(object: Value.Value?, for key: Value.Key) {
-        safeWrite(self.wrappedValue) { map in
+        write(self.wrappedValue) { map in
             var m = map
             m[key] = object
         }
@@ -1362,16 +1303,16 @@ public extension BoundMap where Value.Value: ObjectBase & ThreadConfined {
     func set(object: Value.Value?, for key: Value.Key) {
         // If the value is `nil` remove it from the map.
         guard let value = object else {
-            safeWrite(self.wrappedValue) { map in
+            write(self.wrappedValue) { map in
                 map.removeObject(for: key)
             }
             return
         }
         // if the value is unmanaged but the map is managed, we are adding this value to the realm
         if value.realm == nil && self.wrappedValue.realm != nil {
-            SwiftUIKVO.observedObjects[value]?.cancel()
+            SwiftUIKVO.cancel(value)
         }
-        safeWrite(self.wrappedValue) { map in
+        write(self.wrappedValue) { map in
             var m = map
             m[key] = thawObjectIfFrozen(value)
         }
@@ -1386,7 +1327,7 @@ extension Binding: BoundMap where Value: RealmKeyedCollection {
 extension Binding where Value: Object {
     /// :nodoc:
     public func delete() {
-        safeWrite(wrappedValue) { object in
+        write(wrappedValue) { object in
             object.realm?.delete(thawObjectIfFrozen(self.wrappedValue))
         }
     }
@@ -1396,7 +1337,7 @@ extension Binding where Value: Object {
 extension Binding where Value: ProjectionObservable, Value.Root: ThreadConfined {
     /// :nodoc:
     public func delete() {
-        safeWrite(wrappedValue.rootObject) { object in
+        write(wrappedValue.rootObject) { object in
             object.realm?.delete(thawObjectIfFrozen(object))
         }
     }
@@ -1428,7 +1369,7 @@ extension ThreadConfined where Self: ProjectionObservable {
 extension ObservedRealmObject.Wrapper where ObjectType: ObjectBase {
     /// :nodoc:
     public func delete() {
-        safeWrite(wrappedValue) { object in
+        write(wrappedValue) { object in
             object.realm?.delete(self.wrappedValue)
         }
     }
@@ -1528,46 +1469,88 @@ private class ObservableAsyncOpenStorage: ObservableObject {
         case loggedIn(User)
         case loggedOut
     }
-    private var appState: AppState {
-        didSet {
-            switch appState {
-            case .loggedIn(let user):
-                self.asyncOpenForUser(user)
-            case .loggedOut:
-                asyncOpenState = .waitingForUser
-            }
-        }
-    }
+    private var appState: AppState = .loggedOut
 
     // Cancellables
     private var appCancellable = [AnyCancellable]()
     private var asyncOpenCancellable = [AnyCancellable]()
 
-    @Published var asyncOpenState: AsyncOpenState = .connecting {
-        willSet {
-            objectWillChange.send()
+    @Published fileprivate var asyncOpenState: AsyncOpenState
+
+    init(asyncOpenKind: AsyncOpenKind, app: App, configuration: Realm.Configuration?, partitionValue: AnyBSON?) {
+        self.asyncOpenKind = asyncOpenKind
+        self.app = app
+        self.configuration = configuration
+        self.partitionValue = partitionValue
+
+        // Initialising the state value depending on the user status, before first rendering.
+        if let user = app.currentUser {
+            appState = .loggedIn(user)
+            asyncOpenState = .connecting
+        } else {
+            asyncOpenState = .waitingForUser
         }
     }
 
-    func asyncOpen() {
-        if case let .loggedIn(user) = appState {
+    var setupHasRun = false
+    func setup() {
+        guard !setupHasRun else { return }
+        initAsyncOpen()
+        setupHasRun = true
+    }
+
+    private func initAsyncOpen() {
+        if case .loggedIn(let user) = appState {
+            // we only open the realm on initialisation if there is a user logged.
             asyncOpenForUser(user)
         }
+
+        // we observe the changes in the app state to check for user changes,
+        // we store an internal state, so we could react to those changes (user login, user change, logout).
+        app.objectWillChange.sink { [weak self] app in
+            guard let self = self else { return }
+            switch self.appState {
+            case .loggedIn(let user):
+                if let newUser = app.currentUser,
+                    user != newUser {
+                    self.appState = .loggedIn(newUser)
+                    self.asyncOpenState = .connecting
+                    self.asyncOpenForUser(user)
+                } else if app.currentUser == nil {
+                    self.asyncOpenState = .waitingForUser
+                    self.appState = .loggedOut
+                }
+            case .loggedOut:
+                if let user = app.currentUser {
+                    self.appState = .loggedIn(user)
+                    self.asyncOpenState = .connecting
+                    self.asyncOpenForUser(user)
+                }
+            }
+        }.store(in: &appCancellable)
     }
 
     private func asyncOpenForUser(_ user: User) {
-        asyncOpenState = .connecting
+        let initialSubscriptions = configuration?.syncConfiguration?.initialSubscriptions
 
         // Set the `syncConfiguration` depending if there is partition value (pbs) or not (flx).
         var config: Realm.Configuration
         if let partitionValue = partitionValue {
             config = user.configuration(partitionValue: partitionValue, cancelAsyncOpenOnNonFatalErrors: true)
+        } else if let initialSubscriptions {
+            config = user.flexibleSyncConfiguration(cancelAsyncOpenOnNonFatalErrors: true,
+                                                    initialSubscriptions: ObjectiveCSupport.convert(block: initialSubscriptions.callback),
+                                                    rerunOnOpen: initialSubscriptions.rerunOnOpen)
         } else {
-            config = user.flexibleSyncConfiguration()
+            config = user.flexibleSyncConfiguration(cancelAsyncOpenOnNonFatalErrors: true)
         }
 
         // Use the user configuration by default or set configuration with the current user `syncConfiguration`'s.
         if var configuration = configuration {
+            // We want to throw if the configuration doesn't contain a `SyncConfiguration`
+            guard configuration.syncConfiguration != nil else {
+                throwRealmException("The used configuration was not configured with sync.")
+            }
             let userSyncConfig = config.syncConfiguration
             configuration.syncConfiguration = userSyncConfig
             config = configuration
@@ -1604,6 +1587,23 @@ private class ObservableAsyncOpenStorage: ObservableObject {
             }.store(in: &self.asyncOpenCancellable)
     }
 
+    fileprivate func update(_ partitionValue: PartitionValue?, _ configuration: Realm.Configuration) {
+        if let partitionValue = partitionValue {
+            let bsonValue = AnyBSON(partitionValue: partitionValue)
+            if self.partitionValue != bsonValue {
+                self.partitionValue = bsonValue
+            }
+        }
+
+        // We don't want to use the `defaultConfiguration` from the environment, we only want to use this environment value in @AsyncOpen if is not the default one
+        if configuration != .defaultConfiguration, self.configuration != configuration {
+            if let partitionValue = configuration.syncConfiguration?.partitionValue {
+                self.partitionValue = partitionValue
+            }
+            self.configuration = configuration
+        }
+    }
+
     private func cancelAsyncOpen() {
         asyncOpenCancellable.forEach { $0.cancel() }
         asyncOpenCancellable = []
@@ -1615,39 +1615,9 @@ private class ObservableAsyncOpenStorage: ObservableObject {
         appCancellable = []
     }
 
-    init(asyncOpenKind: AsyncOpenKind, app: App, configuration: Realm.Configuration?, partitionValue: AnyBSON?) {
-        self.asyncOpenKind = asyncOpenKind
-        self.app = app
-        self.configuration = configuration
-        self.partitionValue = partitionValue
-
-        if let user = app.currentUser {
-            appState = .loggedIn(user)
-            asyncOpenForUser(user)
-        } else {
-            appState = .loggedOut
-            asyncOpenState = .waitingForUser
-        }
-        app.objectWillChange.sink { app in
-            switch self.appState {
-            case .loggedIn(let user):
-                if let newUser = app.currentUser,
-                    user != newUser {
-                    self.appState = .loggedIn(newUser)
-                } else if app.currentUser == nil {
-                    self.appState = .loggedOut
-                }
-            case .loggedOut:
-                if let user = app.currentUser {
-                    self.appState = .loggedIn(user)
-                }
-            }
-        }.store(in: &appCancellable)
-    }
-
     // MARK: - AutoOpen & AsyncOpen Helper
 
-    class func configureApp(appId: String? = nil, withTimeout timeout: UInt? = nil) -> App {
+    class func configureApp(appId: String? = nil, timeout: UInt? = nil) -> App {
         var app: App
         if let appId = appId {
             app = App(id: appId)
@@ -1664,10 +1634,8 @@ private class ObservableAsyncOpenStorage: ObservableObject {
         }
 
         // Setup timeout if needed
-        if let timeout = timeout {
-            let syncTimeoutOptions = SyncTimeoutOptions()
-            syncTimeoutOptions.connectTimeout = timeout
-            app.syncManager.timeoutOptions = syncTimeoutOptions
+        if let timeout {
+            app.syncManager.timeoutOptions = SyncTimeoutOptions(connectTimeout: timeout)
         }
         return app
     }
@@ -1723,12 +1691,13 @@ private class ObservableAsyncOpenStorage: ObservableObject {
      A Publisher for `AsyncOpenState`, emits a state each time the asyncOpen state changes.
      */
     public var projectedValue: Published<AsyncOpenState>.Publisher {
-        return storage.$asyncOpenState
+        storage.$asyncOpenState
     }
 
     /// :nodoc:
     public var wrappedValue: AsyncOpenState {
-        storage.asyncOpenState
+        storage.setup()
+        return storage.asyncOpenState
     }
 
     /**
@@ -1746,13 +1715,13 @@ private class ObservableAsyncOpenStorage: ObservableObject {
                  user's sync configuration for the given partition value will be set as the `syncConfiguration`,
                  if empty the user configuration will be used.
      - parameter timeout: The maximum number of milliseconds to allow for a connection to
-     become fully established., if empty or `nil` no connection timeout is set.
+                 become fully established., if empty or `nil` no connection timeout is set.
      */
     public init<Partition>(appId: String? = nil,
                            partitionValue: Partition,
                            configuration: Realm.Configuration? = nil,
                            timeout: UInt? = nil) where Partition: BSON {
-        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, withTimeout: timeout)
+        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, timeout: timeout)
         // Store property wrapper values on the storage
         storage = ObservableAsyncOpenStorage(asyncOpenKind: .asyncOpen, app: app, configuration: configuration, partitionValue: AnyBSON(partitionValue))
     }
@@ -1769,28 +1738,14 @@ private class ObservableAsyncOpenStorage: ObservableObject {
     public init(appId: String? = nil,
                 configuration: Realm.Configuration? = nil,
                 timeout: UInt? = nil) {
-        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, withTimeout: timeout)
+        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, timeout: timeout)
         // Store property wrapper values on the storage
         storage = ObservableAsyncOpenStorage(asyncOpenKind: .asyncOpen, app: app, configuration: configuration, partitionValue: nil)
     }
 
-    public mutating func update() {
-        if let partitionValue = partitionValue {
-            let bsonValue = AnyBSON(partitionValue: partitionValue)
-            if storage.partitionValue != bsonValue {
-                storage.partitionValue = bsonValue
-                storage.asyncOpen()
-            }
-        }
-
-        // We don't want to use the `defaultConfiguration` from the environment, we only want to use this environment value in @AsyncOpen if is not the default one
-        if configuration != .defaultConfiguration,
-           storage.configuration != configuration {
-            if let partitionValue = configuration.syncConfiguration?.partitionValue {
-                storage.partitionValue = partitionValue
-            }
-            storage.configuration = configuration
-            storage.asyncOpen()
+    nonisolated public func update() {
+        assumeOnMainActorExecutor {
+            storage.update(partitionValue, configuration)
         }
     }
 }
@@ -1848,12 +1803,13 @@ private class ObservableAsyncOpenStorage: ObservableObject {
      A Publisher for `AsyncOpenState`, emits a state each time the asyncOpen state changes.
      */
     public var projectedValue: Published<AsyncOpenState>.Publisher {
-        return storage.$asyncOpenState
+        storage.$asyncOpenState
     }
 
     /// :nodoc:
     public var wrappedValue: AsyncOpenState {
-        storage.asyncOpenState
+        storage.setup()
+        return storage.asyncOpenState
     }
 
     /**
@@ -1877,7 +1833,7 @@ private class ObservableAsyncOpenStorage: ObservableObject {
                            partitionValue: Partition,
                            configuration: Realm.Configuration? = nil,
                            timeout: UInt? = nil) where Partition: BSON {
-        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, withTimeout: timeout)
+        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, timeout: timeout)
         // Store property wrapper values on the storage
         storage = ObservableAsyncOpenStorage(asyncOpenKind: .autoOpen, app: app, configuration: configuration, partitionValue: AnyBSON(partitionValue))
     }
@@ -1894,28 +1850,14 @@ private class ObservableAsyncOpenStorage: ObservableObject {
     public init(appId: String? = nil,
                 configuration: Realm.Configuration? = nil,
                 timeout: UInt? = nil) {
-        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, withTimeout: timeout)
+        let app = ObservableAsyncOpenStorage.configureApp(appId: appId, timeout: timeout)
         // Store property wrapper values on the storage
         storage = ObservableAsyncOpenStorage(asyncOpenKind: .autoOpen, app: app, configuration: configuration, partitionValue: nil)
     }
 
-    public mutating func update() {
-        if let partitionValue = partitionValue {
-            let bsonValue = AnyBSON(partitionValue: partitionValue)
-            if storage.partitionValue != bsonValue {
-                storage.partitionValue = bsonValue
-                storage.asyncOpen()
-            }
-        }
-
-        // We don't want to use the `defaultConfiguration` from the environment, we only want to use this environment value in @AsyncOpen if is not the default one
-        if configuration != .defaultConfiguration,
-           storage.configuration != configuration {
-            if let partitionValue = configuration.syncConfiguration?.partitionValue {
-                storage.partitionValue = partitionValue
-            }
-            storage.configuration = configuration
-            storage.asyncOpen()
+    nonisolated public func update() {
+        assumeOnMainActorExecutor {
+            storage.update(partitionValue, configuration)
         }
     }
 }
@@ -1923,24 +1865,22 @@ private class ObservableAsyncOpenStorage: ObservableObject {
 @available(iOS 13.0, macOS 10.15, tvOS 13.0, watchOS 6.0, *)
 extension SwiftUIKVO {
     @objc(removeObserversFromObject:) static func removeObservers(object: NSObject) -> Bool {
-        if let subscription = SwiftUIKVO.observedObjects[object] {
-            subscription.removeObservers()
-            return true
-        } else {
+        Self.observedObjects.withLock {
+            if let subscription = $0[object] {
+                subscription.removeObservers()
+                return true
+            }
             return false
         }
     }
 
     @objc(addObserversToObject:) static func addObservers(object: NSObject) {
-        if let subscription = SwiftUIKVO.observedObjects[object] {
-            subscription.addObservers()
+        Self.observedObjects.withLock {
+            $0[object]?.addObservers()
         }
     }
 }
 
-// Adding `_Concurrency` flag is the only way to verify
-// if the BASE SDK contains latest framework updates
-#if swift(>=5.5) && canImport(_Concurrency)
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 extension View {
     /// Marks this view as searchable, which configures the display of a search field.
@@ -2023,9 +1963,7 @@ extension View {
                                           keyPath: KeyPath<T, String>, placement: SearchFieldPlacement = .automatic,
                                           prompt: LocalizedStringKey) -> some View {
         filterCollection(collection, for: text.wrappedValue, on: keyPath)
-        return searchable(text: text,
-                          placement: placement,
-                          prompt: prompt)
+        return searchable(text: text, placement: placement, prompt: prompt)
     }
 
     /// Marks this view as searchable, which configures the display of a search field.
@@ -2211,7 +2149,7 @@ extension View {
     }
 
     private func filterCollection<T: ObjectBase>(_ collection: ObservedResults<T>, for text: String, on keyPath: KeyPath<T, String>) {
-        DispatchQueue.main.async {
+        assumeOnMainActorExecutor {
             collection.searchText(text, on: keyPath)
         }
     }
@@ -2304,9 +2242,7 @@ extension View {
                                                keyPath: KeyPath<T, String>, placement: SearchFieldPlacement = .automatic,
                                                prompt: LocalizedStringKey) -> some View {
         filterCollection(collection, for: text.wrappedValue, on: keyPath)
-        return searchable(text: text,
-                          placement: placement,
-                          prompt: prompt)
+        return searchable(text: text, placement: placement, prompt: prompt)
     }
 
     /// Marks this view as searchable, which configures the display of a search field.
@@ -2508,19 +2444,8 @@ extension View {
     }
 
     private func filterCollection<Key, T: ObjectBase>(_ collection: ObservedSectionedResults<Key, T>, for text: String, on keyPath: KeyPath<T, String>) {
-        DispatchQueue.main.async {
+        assumeOnMainActorExecutor {
             collection.searchText(text, on: keyPath)
         }
     }
 }
-#endif
-#else
-@objc(RLMSwiftUIKVO) internal final class SwiftUIKVO: NSObject {
-    @objc(removeObserversFromObject:) public static func removeObservers(object: NSObject) -> Bool {
-        return false
-    }
-
-    @objc(addObserversToObject:) public static func addObservers(object: NSObject) {
-    }
-}
-#endif

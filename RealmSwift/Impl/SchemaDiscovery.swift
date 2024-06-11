@@ -39,6 +39,14 @@ public protocol _RealmSchemaDiscoverable {
     static func _rlmPopulateProperty(_ prop: RLMProperty)
 }
 
+extension RLMObjectBase {
+    /// Allow client code to generate properties (ie. via Swift Macros)
+    @_spi(RealmSwiftPrivate)
+    @objc open class func _customRealmProperties() -> [RLMProperty]? {
+        return nil
+    }
+}
+
 internal protocol SchemaDiscoverable: _RealmSchemaDiscoverable {}
 extension SchemaDiscoverable {
     public static var _rlmOptional: Bool { false }
@@ -47,8 +55,8 @@ extension SchemaDiscoverable {
     public static func _rlmPopulateProperty(_ prop: RLMProperty) { }
 }
 
-internal extension RLMProperty {
-    convenience init(name: String, value: _RealmSchemaDiscoverable) {
+extension RLMProperty {
+    internal convenience init(name: String, value: _RealmSchemaDiscoverable) {
         let valueType = Swift.type(of: value)
         self.init()
         self.name = name
@@ -60,9 +68,33 @@ internal extension RLMProperty {
             self.updateAccessors()
         }
     }
+
+    /// Exposed for Macros.
+    /// Important: Keep args in same order & default value as `@Persisted` property wrapper
+    @_spi(RealmSwiftPrivate)
+    public convenience init<O: ObjectBase, V: _Persistable>(
+        name: String,
+        objectType _: O.Type,
+        valueType _: V.Type,
+        indexed: Bool = false,
+        primaryKey: Bool = false,
+        originProperty: String? = nil
+    ) {
+        self.init()
+        self.name = name
+        self.type = V._rlmType
+        self.optional = V._rlmOptional
+        self.indexed = primaryKey || indexed
+        self.isPrimary = primaryKey
+        self.linkOriginPropertyName = originProperty
+        V._rlmPopulateProperty(self)
+        V._rlmSetAccessor(self)
+        self.swiftIvar = ivar_getOffset(class_getInstanceVariable(O.self, "_" + name)!)
+    }
 }
 
 private func getModernProperties(_ object: ObjectBase) -> [RLMProperty] {
+    let columnNames: [String: String] = type(of: object).propertiesMapping()
     return Mirror(reflecting: object).children.compactMap { prop in
         guard let label = prop.label else { return nil }
         guard let value = prop.value as? DiscoverablePersistedProperty else {
@@ -70,6 +102,7 @@ private func getModernProperties(_ object: ObjectBase) -> [RLMProperty] {
         }
         let property = RLMProperty(name: label, value: value)
         property.swiftIvar = ivar_getOffset(class_getInstanceVariable(type(of: object), label)!)
+        property.columnName = columnNames[property.name]
         return property
     }
 }
@@ -88,7 +121,7 @@ private func baseName(forLazySwiftProperty name: String) -> String? {
 private func getLegacyProperties(_ object: ObjectBase, _ cls: ObjectBase.Type) -> [RLMProperty] {
     let indexedProperties: Set<String>
     let ignoredPropNames: Set<String>
-    let columnNames = cls._realmColumnNames()
+    let columnNames: [String: String] = type(of: object).propertiesMapping()
     // FIXME: ignored properties on EmbeddedObject appear to not be supported?
     if let realmObject = object as? Object {
         indexedProperties = Set(type(of: realmObject).indexedProperties())
@@ -132,7 +165,7 @@ private func getLegacyProperties(_ object: ObjectBase, _ cls: ObjectBase.Type) -
 
         let property = RLMProperty(name: label, value: value)
         property.indexed = indexedProperties.contains(property.name)
-        property.columnName = columnNames?[property.name]
+        property.columnName = columnNames[property.name]
 
         if let objcProp = class_getProperty(cls, label) {
             var count: UInt32 = 0
@@ -177,6 +210,9 @@ private func getLegacyProperties(_ object: ObjectBase, _ cls: ObjectBase.Type) -
 }
 
 private func getProperties(_ cls: RLMObjectBase.Type) -> [RLMProperty] {
+    if let props = cls._customRealmProperties() {
+        return props
+    }
     // Check for any modern properties and only scan for legacy properties if
     // none are found.
     let object = cls.init()
@@ -189,7 +225,7 @@ private func getProperties(_ cls: RLMObjectBase.Type) -> [RLMProperty] {
 
 internal class ObjectUtil {
     private static let runOnce: Void = {
-        RLMSwiftBridgeValue = { (value: Any) -> Any? in
+        RLMSetSwiftBridgeCallback { (value: Any) -> Any? in
             // `as AnyObject` required on iOS <= 13; it will compile but silently
             // fail to cast otherwise
             if let value = value as AnyObject as? _ObjcBridgeable {

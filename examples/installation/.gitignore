@@ -5,3 +5,5 @@ realm-swift-latest
 CocoaPodsExample.xcworkspace
 CocoaPodsDynamicExample.xcworkspace
 Cartfile.resolved
+SwiftPackageManager.xcodeproj
+SwiftPackageManagerDynamic.xcodeproj

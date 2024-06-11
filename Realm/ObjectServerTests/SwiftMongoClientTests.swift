@@ -18,6 +18,7 @@
 
 #if os(macOS)
 
+import Combine
 import RealmSwift
 import XCTest
 
@@ -25,14 +26,21 @@ import XCTest
 import RealmSwiftSyncTestSupport
 import RealmSyncTestSupport
 import RealmTestSupport
+import RealmSwiftTestSupport
 #endif
 
 // MARK: - SwiftMongoClientTests
+@available(macOS 13.0, *)
 class SwiftMongoClientTests: SwiftSyncTestCase {
+    override var objectTypes: [ObjectBase.Type] {
+        [Dog.self]
+    }
+
     override func tearDown() {
         _ = setupMongoCollection()
         super.tearDown()
     }
+
     func testMongoClient() {
         let user = try! logInUser(for: .anonymous)
         let mongoClient = user.mongoClient("mongodb1")
@@ -44,31 +52,36 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
     }
 
     func setupMongoCollection() -> MongoCollection {
-        let user = try! logInUser(for: basicCredentials())
-        let mongoClient = user.mongoClient("mongodb1")
-        let database = mongoClient.database(named: "test_data")
-        let collection = database.collection(withName: "Dog")
+        let collection = createUser().collection(for: Dog.self, app: app)
         removeAllFromCollection(collection)
         return collection
     }
 
     func testMongoOptions() {
-        let findOptions = FindOptions(1, nil, nil)
-        let findOptions1 = FindOptions(5, ["name": 1], ["_id": 1])
-        let findOptions2 = FindOptions(5, ["names": ["fido", "bob", "rex"]], ["_id": 1])
+        let findOptions = FindOptions(1)
+        let findOptions1 = FindOptions(5, ["name": 1], [["_id": 1]])
+        let findOptions2 = FindOptions(5, ["names": ["fido", "bob", "rex"]], [["_id": 1]])
+        let findOptions3 = FindOptions(5, ["names": ["fido", "bob", "rex"]], [["_id": 1], ["breed": 0]])
 
         XCTAssertEqual(findOptions.limit, 1)
         XCTAssertEqual(findOptions.projection, nil)
-        XCTAssertEqual(findOptions.sort, nil)
+        XCTAssertTrue(findOptions.sorting.isEmpty)
 
         XCTAssertEqual(findOptions1.limit, 5)
         XCTAssertEqual(findOptions1.projection, ["name": 1])
-        XCTAssertEqual(findOptions1.sort, ["_id": 1])
-        XCTAssertEqual(findOptions2.projection, ["names": ["fido", "bob", "rex"]])
+        XCTAssertTrue(findOptions1.sorting == [["_id": 1]])
 
-        let findModifyOptions = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        XCTAssertEqual(findOptions2.limit, 5)
+        XCTAssertEqual(findOptions2.projection, ["names": ["fido", "bob", "rex"]])
+        XCTAssertTrue(findOptions2.sorting == [["_id": 1]])
+
+        XCTAssertEqual(findOptions3.limit, 5)
+        XCTAssertEqual(findOptions3.projection, ["names": ["fido", "bob", "rex"]])
+        XCTAssertTrue(findOptions3.sorting == [["_id": 1], ["breed": 0]])
+
+        let findModifyOptions = FindOneAndModifyOptions(["name": 1], [["_id": 1], ["breed": 0]], true, true)
         XCTAssertEqual(findModifyOptions.projection, ["name": 1])
-        XCTAssertEqual(findModifyOptions.sort, ["_id": 1])
+        XCTAssertEqual(findModifyOptions.sorting, [["_id": 1], ["breed": 0]])
         XCTAssertTrue(findModifyOptions.upsert)
         XCTAssertTrue(findModifyOptions.shouldReturnNewDocument)
     }
@@ -121,7 +134,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         let document: Document = ["name": "fido", "breed": "cane corso"]
         let document2: Document = ["name": "rex", "breed": "tibetan mastiff"]
         let document3: Document = ["name": "rex", "breed": "tibetan mastiff", "coat": ["fawn", "brown", "white"]]
-        let findOptions = FindOptions(1, nil, nil)
+        let findOptions = FindOptions(1, nil)
 
         let insertManyEx1 = expectation(description: "Insert many documents")
         collection.insertMany([document, document2, document3]) { result in
@@ -219,7 +232,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneReplaceEx1], timeout: 20.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, true)
         let findOneReplaceEx2 = expectation(description: "Find one document and replace")
         collection.findOneAndReplace(filter: document2, replacement: document3, options: options1) { result in
             switch result {
@@ -232,7 +245,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneReplaceEx2], timeout: 20.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, false)
         let findOneReplaceEx3 = expectation(description: "Find one document and replace")
         collection.findOneAndReplace(filter: document, replacement: document2, options: options2) { result in
             switch result {
@@ -266,7 +279,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneUpdateEx1], timeout: 20.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, true)
         let findOneUpdateEx2 = expectation(description: "Find one document and update")
         collection.findOneAndUpdate(filter: document2, update: document3, options: options1) { result in
             switch result {
@@ -280,7 +293,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneUpdateEx2], timeout: 20.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, true)
         let findOneUpdateEx3 = expectation(description: "Find one document and update")
         collection.findOneAndUpdate(filter: document, update: document2, options: options2) { result in
             switch result {
@@ -324,7 +337,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneDeleteEx1], timeout: 20.0)
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], false, false)
+        let options1 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], false, false)
         let findOneDeleteEx2 = expectation(description: "Find one document and delete")
         collection.findOneAndDelete(filter: document, options: options1) { result in
             switch result {
@@ -338,7 +351,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         }
         wait(for: [findOneDeleteEx2], timeout: 20.0)
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1])
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]])
         let findOneDeleteEx3 = expectation(description: "Find one document and delete")
         collection.findOneAndDelete(filter: document, options: options2) { result in
             switch result {
@@ -391,7 +404,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
             case .success(let updateResult):
                 XCTAssertEqual(updateResult.matchedCount, 1)
                 XCTAssertEqual(updateResult.modifiedCount, 1)
-                XCTAssertNil(updateResult.objectId)
+                XCTAssertNil(updateResult.documentId)
             case .failure:
                 XCTFail("Should update")
             }
@@ -405,7 +418,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
             case .success(let updateResult):
                 XCTAssertEqual(updateResult.matchedCount, 0)
                 XCTAssertEqual(updateResult.modifiedCount, 0)
-                XCTAssertNotNil(updateResult.objectId)
+                XCTAssertNotNil(updateResult.documentId)
             case .failure:
                 XCTFail("Should update")
             }
@@ -440,7 +453,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
             case .success(let updateResult):
                 XCTAssertEqual(updateResult.matchedCount, 1)
                 XCTAssertEqual(updateResult.modifiedCount, 1)
-                XCTAssertNil(updateResult.objectId)
+                XCTAssertNil(updateResult.documentId)
             case .failure:
                 XCTFail("Should update")
             }
@@ -454,7 +467,7 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
             case .success(let updateResult):
                 XCTAssertEqual(updateResult.matchedCount, 0)
                 XCTAssertEqual(updateResult.modifiedCount, 0)
-                XCTAssertNotNil(updateResult.objectId)
+                XCTAssertNotNil(updateResult.documentId)
             case .failure:
                 XCTFail("Should update")
             }
@@ -597,217 +610,211 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
         wait(for: [countEx2], timeout: 20.0)
     }
 
-    func testWatch() {
-        performWatchTest(nil)
+    func testWatch() throws {
+        try performWatchTest(.main)
     }
 
-    func testWatchAsync() {
-        let queue = DispatchQueue.init(label: "io.realm.watchQueue", attributes: .concurrent)
-        performWatchTest(queue)
+    func testWatchAsync() throws {
+        let queue = DispatchQueue(label: "io.realm.watchQueue", attributes: .concurrent)
+        try performWatchTest(queue)
     }
 
-    func performWatchTest(_ queue: DispatchQueue?) {
+    func performWatchTest(_ queue: DispatchQueue) throws {
         let collection = setupMongoCollection()
         let document: Document = ["name": "fido", "breed": "cane corso"]
 
-        var watchEx = expectation(description: "Watch 3 document events")
-        let watchTestUtility = WatchTestUtility(targetEventCount: 3, expectation: &watchEx)
-
-        let changeStream: ChangeStream?
-        if let queue = queue {
-            changeStream = collection.watch(delegate: watchTestUtility, queue: queue)
-        } else {
-            changeStream = collection.watch(delegate: watchTestUtility)
-        }
-
-        DispatchQueue.global().async {
-            watchTestUtility.isOpenSemaphore.wait()
-            for _ in 0..<3 {
-                collection.insertOne(document) { result in
-                    if case .failure = result {
-                        XCTFail("Should insert")
-                    }
+        let watchTestUtility = WatchTestUtility(testCase: self)
+        let changeStream = collection.watch(delegate: watchTestUtility, queue: queue)
+        watchTestUtility.waitForOpen()
+        for _ in 0..<3 {
+            watchTestUtility.expectEvent()
+            collection.insertOne(document) { result in
+                if case .failure = result {
+                    XCTFail("Should insert")
                 }
-                watchTestUtility.semaphore.wait()
             }
-            changeStream?.close()
+            try watchTestUtility.waitForEvent()
         }
-        wait(for: [watchEx], timeout: 60.0)
+        changeStream.close()
+        watchTestUtility.waitForClose()
     }
 
-    func testWatchWithMatchFilter() {
-        performWatchWithMatchFilterTest(nil)
+    func testWatchWithMatchFilter() throws {
+        try performWatchWithMatchFilterTest(.main)
     }
 
-    func testWatchWithMatchFilterAsync() {
-        let queue = DispatchQueue.init(label: "io.realm.watchQueue", attributes: .concurrent)
-        performWatchWithMatchFilterTest(queue)
+    func testWatchWithMatchFilterQueue() throws {
+        let queue = DispatchQueue(label: "io.realm.watchQueue", attributes: .concurrent)
+        try performWatchWithMatchFilterTest(queue)
     }
 
-    func performWatchWithMatchFilterTest(_ queue: DispatchQueue?) {
-        let collection = setupMongoCollection()
+    func insertDocuments(_ collection: MongoCollection) -> [ObjectId] {
         let document: Document = ["name": "fido", "breed": "cane corso"]
         let document2: Document = ["name": "rex", "breed": "cane corso"]
         let document3: Document = ["name": "john", "breed": "cane corso"]
         let document4: Document = ["name": "ted", "breed": "bullmastiff"]
-        var objectIds = [ObjectId]()
-        let insertManyEx = expectation(description: "Insert many documents")
-        collection.insertMany([document, document2, document3, document4]) { result in
-            switch result {
-            case .success(let objIds):
-                XCTAssertEqual(objIds.count, 4)
-                objectIds = objIds.map { $0.objectIdValue! }
-            case .failure:
-                XCTFail("Should insert")
-            }
-            insertManyEx.fulfill()
-        }
-        wait(for: [insertManyEx], timeout: 20.0)
 
-        var watchEx = expectation(description: "Watch 3 document events")
-        let watchTestUtility = WatchTestUtility(targetEventCount: 3, matchingObjectId: objectIds.first!, expectation: &watchEx)
-
-        let changeStream: ChangeStream?
-        if let queue = queue {
-            changeStream = collection.watch(matchFilter: ["fullDocument._id": AnyBSON.objectId(objectIds[0])],
-                                            delegate: watchTestUtility,
-                                            queue: queue)
-        } else {
-            changeStream = collection.watch(matchFilter: ["fullDocument._id": AnyBSON.objectId(objectIds[0])],
-                                            delegate: watchTestUtility)
-        }
-
-        DispatchQueue.global().async {
-            watchTestUtility.isOpenSemaphore.wait()
-            for i in 0..<3 {
-                let name: AnyBSON = .string("fido-\(i)")
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
-                }
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
-                }
-                watchTestUtility.semaphore.wait()
-            }
-            changeStream?.close()
-        }
-        wait(for: [watchEx], timeout: 60.0)
+        let objectIds = collection.insertMany([document, document2, document3, document4])
+            .map { @Sendable in $0.map(\.objectIdValue!) }
+            .await(self)
+        XCTAssertEqual(objectIds.count, 4)
+        return objectIds
     }
 
-    func testWatchWithFilterIds() {
-        performWatchWithFilterIdsTest(nil)
-    }
-
-    func testWatchWithFilterIdsAsync() {
-        let queue = DispatchQueue.init(label: "io.realm.watchQueue", attributes: .concurrent)
-        performWatchWithFilterIdsTest(queue)
-    }
-
-    func performWatchWithFilterIdsTest(_ queue: DispatchQueue?) {
+    func performWatchWithMatchFilterTest(_ queue: DispatchQueue?) throws {
         let collection = setupMongoCollection()
-        let document: Document = ["name": "fido", "breed": "cane corso"]
-        let document2: Document = ["name": "rex", "breed": "cane corso"]
-        let document3: Document = ["name": "john", "breed": "cane corso"]
-        let document4: Document = ["name": "ted", "breed": "bullmastiff"]
-        var objectIds = [ObjectId]()
+        let objectIds = insertDocuments(collection)
+        let watchTestUtility = WatchTestUtility(testCase: self, matchingObjectId: objectIds.first!)
 
-        let insertManyEx = expectation(description: "Insert many documents")
-        collection.insertMany([document, document2, document3, document4]) { result in
-            switch result {
-            case .success(let objIds):
-                XCTAssertEqual(objIds.count, 4)
-                objectIds = objIds.map { $0.objectIdValue! }
-            case .failure:
-                XCTFail("Should insert")
-            }
-            insertManyEx.fulfill()
+        let filter = ["fullDocument._id": AnyBSON.objectId(objectIds[0])]
+        let changeStream: ChangeStream
+        if let queue = queue {
+            changeStream = collection.watch(matchFilter: filter, delegate: watchTestUtility, queue: queue)
+        } else {
+            changeStream = collection.watch(matchFilter: filter, delegate: watchTestUtility)
         }
-        wait(for: [insertManyEx], timeout: 20.0)
+        watchTestUtility.waitForOpen()
 
-        var watchEx = expectation(description: "Watch 3 document events")
-        let watchTestUtility = WatchTestUtility(targetEventCount: 3,
-                                                matchingObjectId: objectIds.first!,
-                                                expectation: &watchEx)
-        let changeStream: ChangeStream?
+        for i in 0..<3 {
+            watchTestUtility.expectEvent()
+            let name: AnyBSON = .string("fido-\(i)")
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
+                }
+            }
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
+                }
+            }
+            try watchTestUtility.waitForEvent()
+        }
+        changeStream.close()
+        watchTestUtility.waitForClose()
+    }
+
+    func testWatchWithFilterIds() throws {
+        try performWatchWithFilterIdsTest(nil)
+    }
+
+    func testWatchWithFilterIdsQueue() throws {
+        let queue = DispatchQueue(label: "io.realm.watchQueue", attributes: .concurrent)
+        try performWatchWithFilterIdsTest(queue)
+    }
+
+    func performWatchWithFilterIdsTest(_ queue: DispatchQueue?) throws {
+        let collection = setupMongoCollection()
+        let objectIds = insertDocuments(collection)
+        let watchTestUtility = WatchTestUtility(testCase: self, matchingObjectId: objectIds.first!)
+        let changeStream: ChangeStream
         if let queue = queue {
             changeStream = collection.watch(filterIds: [objectIds[0]], delegate: watchTestUtility, queue: queue)
         } else {
             changeStream = collection.watch(filterIds: [objectIds[0]], delegate: watchTestUtility)
         }
+        watchTestUtility.waitForOpen()
 
-        DispatchQueue.global().async {
-            watchTestUtility.isOpenSemaphore.wait()
-            for i in 0..<3 {
-                let name: AnyBSON = .string("fido-\(i)")
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
+        for i in 0..<3 {
+            watchTestUtility.expectEvent()
+            let name: AnyBSON = .string("fido-\(i)")
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
                 }
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
-                }
-                watchTestUtility.semaphore.wait()
             }
-            changeStream?.close()
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
+                }
+            }
+            try watchTestUtility.waitForEvent()
         }
-        wait(for: [watchEx], timeout: 60.0)
+        changeStream.close()
+        watchTestUtility.waitForClose()
     }
 
-    func testWatchMultipleFilterStreams() {
-        performMultipleWatchStreamsTest(nil)
-    }
-
-    func testWatchMultipleFilterStreamsAsync() {
-        let queue = DispatchQueue.init(label: "io.realm.watchQueue", attributes: .concurrent)
-        performMultipleWatchStreamsTest(queue)
-    }
-
-    func performMultipleWatchStreamsTest(_ queue: DispatchQueue?) {
+    @available(macOS 13, *)
+    func performAsyncWatchTest(filterIds: Bool = false, matchFilter: Bool = false) async throws {
         let collection = setupMongoCollection()
-        let document: Document = ["name": "fido", "breed": "cane corso"]
-        let document2: Document = ["name": "rex", "breed": "cane corso"]
-        let document3: Document = ["name": "john", "breed": "cane corso"]
-        let document4: Document = ["name": "ted", "breed": "bullmastiff"]
-        var objectIds = [ObjectId]()
+        let objectIds = insertDocuments(collection)
 
-        let insertManyEx = expectation(description: "Insert many documents")
-        collection.insertMany([document, document2, document3, document4]) { result in
-            switch result {
-            case .success(let objIds):
-                XCTAssertEqual(objIds.count, 4)
-                objectIds = objIds.map { $0.objectIdValue! }
-            case .failure:
-                XCTFail("Should insert")
+        let openEx = expectation(description: "open watch stream")
+        @Locked var ex: XCTestExpectation!
+        let task = Task {
+            let changeEvents: AsyncThrowingPublisher<Publishers.WatchPublisher>
+            if filterIds {
+                changeEvents = collection.changeEvents(filterIds: [objectIds[0]],
+                                                       onOpen: { openEx.fulfill() })
+            } else if matchFilter {
+                let filter = ["fullDocument._id": AnyBSON.objectId(objectIds[0])]
+                changeEvents = collection.changeEvents(matchFilter: filter, onOpen: { openEx.fulfill() })
+            } else {
+                changeEvents = collection.changeEvents(onOpen: { openEx.fulfill() })
             }
-            insertManyEx.fulfill()
+
+            for try await event in changeEvents {
+                let doc = event.documentValue!
+                XCTAssertEqual(doc["operationType"], "replace")
+                let id = try XCTUnwrap(doc["documentKey"]??.documentValue?["_id"]??.objectIdValue)
+                XCTAssertEqual(id, objectIds[0])
+                ex.fulfill()
+            }
         }
-        wait(for: [insertManyEx], timeout: 20.0)
+        await fulfillment(of: [openEx], timeout: 2.0)
 
-        var watchEx = expectation(description: "Watch 5 document events")
-        watchEx.expectedFulfillmentCount = 2
+        for i in 0..<3 {
+            ex = expectation(description: "got change event")
+            let name: AnyBSON = .string("fido-\(i)")
+            _ = try await collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
+                                                       update: ["name": name, "breed": "king charles"])
+            if filterIds || matchFilter {
+                _ = try await collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
+                                                           update: ["name": name, "breed": "king charles"])
+            }
+            await fulfillment(of: [ex], timeout: 2.0)
+        }
 
-        let watchTestUtility1 = WatchTestUtility(targetEventCount: 3,
-                                                 matchingObjectId: objectIds[0],
-                                                 expectation: &watchEx)
+        task.cancel()
+        _ = await task.result
+    }
 
-        let watchTestUtility2 = WatchTestUtility(targetEventCount: 3,
-                                                 matchingObjectId: objectIds[1],
-                                                 expectation: &watchEx)
+    @available(macOS 13, *)
+    func testWatchAsync() async throws {
+        try await performAsyncWatchTest()
+    }
 
-        let changeStream1: ChangeStream?
-        let changeStream2: ChangeStream?
+    @available(macOS 13, *)
+    func testWatchWithMatchFilterAsync() async throws {
+        try await performAsyncWatchTest(matchFilter: true)
+    }
 
+    @available(macOS 13, *)
+    func testWatchWithFilterIdsAsync() async throws {
+        try await performAsyncWatchTest(filterIds: true)
+    }
+
+    func testWatchMultipleFilterStreams() throws {
+        try performMultipleWatchStreamsTest(nil)
+    }
+
+    func testWatchMultipleFilterStreamsAsync() throws {
+        let queue = DispatchQueue(label: "io.realm.watchQueue", attributes: .concurrent)
+        try performMultipleWatchStreamsTest(queue)
+    }
+
+    func performMultipleWatchStreamsTest(_ queue: DispatchQueue?) throws {
+        let collection = setupMongoCollection()
+        let objectIds = insertDocuments(collection)
+        let watchTestUtility1 = WatchTestUtility(testCase: self, matchingObjectId: objectIds[0])
+        let watchTestUtility2 = WatchTestUtility(testCase: self, matchingObjectId: objectIds[1])
+
+        let changeStream1: ChangeStream
+        let changeStream2: ChangeStream
         if let queue = queue {
             changeStream1 = collection.watch(filterIds: [objectIds[0]], delegate: watchTestUtility1, queue: queue)
             changeStream2 = collection.watch(filterIds: [objectIds[1]], delegate: watchTestUtility2, queue: queue)
@@ -815,39 +822,36 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
             changeStream1 = collection.watch(filterIds: [objectIds[0]], delegate: watchTestUtility1)
             changeStream2 = collection.watch(filterIds: [objectIds[1]], delegate: watchTestUtility2)
         }
+        watchTestUtility1.waitForOpen()
+        watchTestUtility2.waitForOpen()
 
-        let teardownEx = expectation(description: "All changes complete")
-        DispatchQueue.global().async {
-            watchTestUtility1.isOpenSemaphore.wait()
-            watchTestUtility2.isOpenSemaphore.wait()
-            for i in 0..<3 {
-                let name: AnyBSON = .string("fido-\(i)")
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
+        for i in 0..<3 {
+            watchTestUtility1.expectEvent()
+            watchTestUtility2.expectEvent()
+            let name: AnyBSON = .string("fido-\(i)")
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[0])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
                 }
-                collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
-                                             update: ["name": name, "breed": "king charles"]) { result in
-                    if case .failure = result {
-                        XCTFail("Should update")
-                    }
-                }
-                watchTestUtility1.semaphore.wait()
-                watchTestUtility2.semaphore.wait()
             }
-            changeStream1?.close()
-            changeStream2?.close()
-            teardownEx.fulfill()
+            collection.updateOneDocument(filter: ["_id": AnyBSON.objectId(objectIds[1])],
+                                         update: ["name": name, "breed": "king charles"]) { result in
+                if case .failure = result {
+                    XCTFail("Should update")
+                }
+            }
+            try watchTestUtility1.waitForEvent()
+            try watchTestUtility2.waitForEvent()
         }
-        wait(for: [watchEx, teardownEx], timeout: 60.0)
+        changeStream1.close()
+        changeStream2.close()
+        watchTestUtility1.waitForClose()
+        watchTestUtility2.waitForClose()
     }
 
     func testShouldNotDeleteOnMigrationWithSync() throws {
-        let user = try logInUser(for: basicCredentials())
-        var configuration = user.configuration(testName: appId)
-
+        var configuration = try configuration()
         assertThrows(configuration.deleteRealmIfMigrationNeeded = true,
                      reason: "Cannot set 'deleteRealmIfMigrationNeeded' when sync is enabled ('syncConfig' is set).")
 
@@ -859,9 +863,12 @@ class SwiftMongoClientTests: SwiftSyncTestCase {
 }
 
 // MARK: - AsyncAwaitMongoClientTests
-#if swift(>=5.6) && canImport(_Concurrency)
-@available(macOS 12.0, *)
+@available(macOS 13, *)
 class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
+    override var objectTypes: [ObjectBase.Type] {
+        [Dog.self]
+    }
+
     override class var defaultTestSuite: XCTestSuite {
         // async/await is currently incompatible with thread sanitizer and will
         // produce many false positives
@@ -874,12 +881,56 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
     }
 
     func setupMongoCollection() async throws -> MongoCollection {
-        let user = try await self.app.login(credentials: basicCredentials())
-        let mongoClient = user.mongoClient("mongodb1")
-        let database = mongoClient.database(named: "test_data")
-        let collection = database.collection(withName: "Dog")
+        let collection = try await createUser().collection(for: Dog.self, app: app)
         _ = try await collection.deleteManyDocuments(filter: [:])
         return collection
+    }
+
+    func testMongoFindSortOptions() async throws {
+        let collection = try await setupMongoCollection()
+
+        let document: Document = ["name": "fido", "breed": "cane corso"]
+        let document2: Document = ["name": "rex", "breed": "tibetan mastiff"]
+        let document3: Document = ["name": "rex", "breed": "cane corso"]
+        let document4: Document = ["name": "fido", "breed": "tibetan mastiff"]
+
+        let objectIds = try await collection.insertMany([document, document2, document3, document4])
+        XCTAssertNotNil(objectIds)
+        XCTAssertEqual(objectIds.count, 4)
+
+        let findOptions = FindOptions(0, nil, [["name": 1], ["breed": 1]])
+        let fetchedDocuments = try await collection.find(filter: [:], options: findOptions)
+        XCTAssertEqual(fetchedDocuments.count, 4)
+        XCTAssertEqual(fetchedDocuments[0]["name"]??.stringValue, "fido")
+        XCTAssertEqual(fetchedDocuments[0]["breed"]??.stringValue, "cane corso")
+        XCTAssertEqual(fetchedDocuments[1]["name"]??.stringValue, "fido")
+        XCTAssertEqual(fetchedDocuments[1]["breed"]??.stringValue, "tibetan mastiff")
+        XCTAssertEqual(fetchedDocuments[2]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments[2]["breed"]??.stringValue, "cane corso")
+        XCTAssertEqual(fetchedDocuments[3]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments[3]["breed"]??.stringValue, "tibetan mastiff")
+
+
+        for try _ in 0...10 {
+            let findOptions2 = FindOptions(0, nil, [["name": 1], ["breed": 1]])
+            let fetchedDocuments2 = try await collection.find(filter: [:], options: findOptions2)
+            XCTAssertEqual(fetchedDocuments[0]["name"], fetchedDocuments2[0]["name"])
+            XCTAssertEqual(fetchedDocuments[0]["breed"], fetchedDocuments2[0]["breed"])
+            XCTAssertEqual(fetchedDocuments[1]["name"], fetchedDocuments2[1]["name"])
+            XCTAssertEqual(fetchedDocuments[1]["breed"], fetchedDocuments2[1]["breed"])
+            XCTAssertEqual(fetchedDocuments[2]["name"], fetchedDocuments2[2]["name"])
+            XCTAssertEqual(fetchedDocuments[2]["breed"], fetchedDocuments2[2]["breed"])
+            XCTAssertEqual(fetchedDocuments[3]["name"], fetchedDocuments2[3]["name"])
+            XCTAssertEqual(fetchedDocuments[3]["breed"], fetchedDocuments2[3]["breed"])
+        }
+
+        let findOptions3 = FindOptions(0, nil, [["breed": 1], ["name": 1]])
+        let fetchedDocuments3 = try await collection.find(filter: [:], options: findOptions3)
+        XCTAssertEqual(fetchedDocuments3.count, 4)
+        XCTAssertEqual(fetchedDocuments3[0]["name"]??.stringValue, "fido")
+        XCTAssertEqual(fetchedDocuments3[0]["breed"]??.stringValue, "cane corso")
+        XCTAssertEqual(fetchedDocuments3[3]["name"]??.stringValue, "rex")
+        XCTAssertEqual(fetchedDocuments3[3]["breed"]??.stringValue, "tibetan mastiff")
     }
 
     func testMongoCollectionInsertOneAsyncAwait() async throws {
@@ -926,7 +977,7 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertEqual(fetchedDocuments[3]["breed"]??.stringValue, "labradoodle")
 
         // Test filter all with option limit to one
-        let findOptions = FindOptions(1, nil, nil)
+        let findOptions = FindOptions(1, nil)
         let fetchedDocuments2 = try await collection.find(filter: [:], options: findOptions)
         XCTAssertEqual(fetchedDocuments2.count, 1)
         XCTAssertEqual(fetchedDocuments2[0]["name"]??.stringValue, "tomas")
@@ -959,7 +1010,7 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertEqual(fetchedOneDocument?["breed"]??.stringValue, "jack rusell")
 
         // Test findOne all with option limit
-        let findOptions = FindOptions(1, nil, nil)
+        let findOptions = FindOptions(1, nil)
         let fetchedOneDocument2 = try await collection.findOneDocument(filter: [:], options: findOptions)
         XCTAssertNotNil(fetchedOneDocument2)
 
@@ -987,12 +1038,12 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertNotNil(resultReplacedDocument)
         XCTAssertEqual(resultReplacedDocument?["name"]??.stringValue, "tomas") // shouldReturnNewDocument is false that is why returns old document
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, true)
         let resultReplacedDocument2 = try await collection.findOneAndReplace(filter: document1, replacement: document2, options: options1)
         XCTAssertNotNil(resultReplacedDocument2)
         XCTAssertEqual(resultReplacedDocument2?["name"]??.stringValue, "fito")
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, false)
         let resultReplacedDocument3 = try await collection.findOneAndReplace(filter: document, replacement: document1, options: options2)
         XCTAssertNil(resultReplacedDocument3)
     }
@@ -1016,12 +1067,12 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertNotNil(resultUpdatedDocument)
         XCTAssertEqual(resultUpdatedDocument?["name"]??.stringValue, "tomas") // shouldReturnNewDocument is false that is why returns old document
 
-        let options1 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, true)
+        let options1 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, true)
         let resultUpdatedDocument2 = try await collection.findOneAndUpdate(filter: document1, update: document2, options: options1)
         XCTAssertNotNil(resultUpdatedDocument2)
         XCTAssertEqual(resultUpdatedDocument2?["name"]??.stringValue, "fito")
 
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1], true, false)
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]], true, false)
         let resultUpdatedDocument3 = try await collection.findOneAndUpdate(filter: document, update: document1, options: options2)
         XCTAssertNil(resultUpdatedDocument3)
     }
@@ -1044,7 +1095,7 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
         XCTAssertEqual(deletedDocument?["name"]??.stringValue, "tomas")
 
         // Document already deleted, should return nil
-        let options2 = FindOneAndModifyOptions(["name": 1], ["_id": 1])
+        let options2 = FindOneAndModifyOptions(["name": 1], [["_id": 1]])
         let deletedDocument3 = try await collection.findOneAndDelete(filter: document, options: options2)
         XCTAssertNil(deletedDocument3)
 
@@ -1065,14 +1116,14 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
 
         let updatedResult = try await collection.updateOneDocument(filter: document,
                                                                    update: document2)
-        XCTAssertNil(updatedResult.objectId)
+        XCTAssertNil(updatedResult.documentId)
         XCTAssertEqual(updatedResult.matchedCount, 1)
         XCTAssertEqual(updatedResult.modifiedCount, 1)
 
         let updatedResult1 = try await collection.updateOneDocument(filter: document,
                                                                     update: document2,
                                                                     upsert: true)
-        XCTAssertNotNil(updatedResult1.objectId)
+        XCTAssertNotNil(updatedResult1.documentId)
         XCTAssertEqual(updatedResult1.matchedCount, 0)
         XCTAssertEqual(updatedResult1.modifiedCount, 0)
     }
@@ -1090,14 +1141,14 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
 
         let updatedResult = try await collection.updateManyDocuments(filter: document,
                                                                      update: document2)
-        XCTAssertNil(updatedResult.objectId)
+        XCTAssertNil(updatedResult.documentId)
         XCTAssertEqual(updatedResult.matchedCount, 1)
         XCTAssertEqual(updatedResult.modifiedCount, 1)
 
         let updatedResult2 = try await collection.updateManyDocuments(filter: document,
                                                                       update: document2,
                                                                       upsert: true)
-        XCTAssertNotNil(updatedResult2.objectId)
+        XCTAssertNotNil(updatedResult2.documentId)
         XCTAssertEqual(updatedResult2.matchedCount, 0)
         XCTAssertEqual(updatedResult2.modifiedCount, 0)
     }
@@ -1190,5 +1241,4 @@ class AsyncAwaitMongoClientTests: SwiftSyncTestCase {
     }
 }
 
-#endif // swift(>=5.6)
 #endif // os(macOS)

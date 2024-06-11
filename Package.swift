@@ -1,20 +1,19 @@
-// swift-tools-version:5.5
+// swift-tools-version:5.7
 
 import PackageDescription
 import Foundation
 
-let coreVersionStr = "12.6.0"
-let cocoaVersionStr = "10.29.0"
+let coreVersion = Version("14.9.0")
+let cocoaVersion = Version("10.51.0")
 
-let coreVersionPieces = coreVersionStr.split(separator: ".")
-let coreVersionExtra = coreVersionPieces[2].split(separator: "-")
 let cxxSettings: [CXXSetting] = [
     .headerSearchPath("."),
     .headerSearchPath("include"),
     .define("REALM_SPM", to: "1"),
     .define("REALM_ENABLE_SYNC", to: "1"),
-    .define("REALM_COCOA_VERSION", to: "@\"\(cocoaVersionStr)\""),
-    .define("REALM_VERSION", to: "\"\(coreVersionStr)\""),
+    .define("REALM_COCOA_VERSION", to: "@\"\(cocoaVersion)\""),
+    .define("REALM_VERSION", to: "\"\(coreVersion)\""),
+    .define("REALM_IOPLATFORMUUID", to: "@\"\(runCommand())\""),
 
     .define("REALM_DEBUG", .when(configuration: .debug)),
     .define("REALM_NO_CONFIG"),
@@ -22,11 +21,12 @@ let cxxSettings: [CXXSetting] = [
     .define("REALM_ENABLE_ASSERTIONS", to: "1"),
     .define("REALM_ENABLE_ENCRYPTION", to: "1"),
 
-    .define("REALM_VERSION_MAJOR", to: String(coreVersionPieces[0])),
-    .define("REALM_VERSION_MINOR", to: String(coreVersionPieces[1])),
-    .define("REALM_VERSION_PATCH", to: String(coreVersionExtra[0])),
-    .define("REALM_VERSION_EXTRA", to: "\"\(coreVersionExtra.count > 1 ? String(coreVersionExtra[1]) : "")\""),
-    .define("REALM_VERSION_STRING", to: "\"\(coreVersionStr)\""),
+    .define("REALM_VERSION_MAJOR", to: String(coreVersion.major)),
+    .define("REALM_VERSION_MINOR", to: String(coreVersion.minor)),
+    .define("REALM_VERSION_PATCH", to: String(coreVersion.patch)),
+    .define("REALM_VERSION_EXTRA", to: "\"\(coreVersion.prereleaseIdentifiers.first ?? "")\""),
+    .define("REALM_VERSION_STRING", to: "\"\(coreVersion)\""),
+    .define("REALM_ENABLE_GEOSPATIAL", to: "1"),
 ]
 let testCxxSettings: [CXXSetting] = cxxSettings + [
     // Command-line `swift build` resolves header search paths
@@ -39,24 +39,28 @@ let testCxxSettings: [CXXSetting] = cxxSettings + [
 // SPM requires all targets to explicitly include or exclude every file, which
 // gets very awkward when we have four targets building from a single directory
 let objectServerTestSources = [
+    "AsyncSyncTests.swift",
+    "ClientResetTests.swift",
+    "CombineSyncTests.swift",
+    "EventTests.swift",
     "Object-Server-Tests-Bridging-Header.h",
     "ObjectServerTests-Info.plist",
     "RLMAsymmetricSyncServerTests.mm",
     "RLMBSONTests.mm",
     "RLMCollectionSyncTests.mm",
     "RLMFlexibleSyncServerTests.mm",
+    "RLMMongoClientTests.mm",
     "RLMObjectServerPartitionTests.mm",
     "RLMObjectServerTests.mm",
+    "RLMServerTestObjects.h",
     "RLMServerTestObjects.m",
+    "RLMSubscriptionTests.mm",
     "RLMSyncTestCase.h",
     "RLMSyncTestCase.mm",
-    "RLMTestUtils.h",
-    "RLMTestUtils.m",
     "RLMUser+ObjectServerTests.h",
     "RLMUser+ObjectServerTests.mm",
     "RLMWatchTestUtility.h",
     "RLMWatchTestUtility.m",
-    "EventTests.swift",
     "RealmServer.swift",
     "SwiftAsymmetricSyncServerTests.swift",
     "SwiftCollectionSyncTests.swift",
@@ -97,43 +101,78 @@ func objectServerTestTarget(name: String, sources: [String]) -> Target {
     )
 }
 
+func runCommand() -> String {
+    let task = Process()
+    let pipe = Pipe()
+
+    task.executableURL = URL(fileURLWithPath: "/usr/sbin/ioregg")
+    task.arguments = ["-rd1", "-c", "IOPlatformExpertDevice"]
+    task.standardInput = nil
+    task.standardError = nil
+    task.standardOutput = pipe
+    do {
+        try task.run()
+    } catch {
+        return ""
+    }
+
+    let data = pipe.fileHandleForReading.readDataToEndOfFile()
+    let output = String(data: data, encoding: .utf8) ?? ""
+    let range = NSRange(output.startIndex..., in: output)
+    guard let regex = try? NSRegularExpression(pattern: ".*\\\"IOPlatformUUID\\\"\\s=\\s\\\"(.+)\\\"", options: .caseInsensitive),
+          let firstMatch = regex.matches(in: output, range: range).first else {
+        return ""
+    }
+
+    let matches = (0..<firstMatch.numberOfRanges).compactMap { ind -> String? in
+        let matchRange = firstMatch.range(at: ind)
+        if matchRange != range,
+           let substringRange = Range(matchRange, in: output) {
+            let capture = String(output[substringRange])
+            return capture
+        }
+        return nil
+    }
+    return matches.last ?? ""
+}
+
 let package = Package(
     name: "Realm",
     platforms: [
-        .macOS(.v10_10),
-        .iOS(.v11),
-        .tvOS(.v9),
-        .watchOS(.v2)
+        .macOS(.v10_13),
+        .iOS(.v12),
+        .tvOS(.v12),
+        .watchOS(.v4)
     ],
     products: [
         .library(
             name: "Realm",
+            type: .dynamic,
             targets: ["Realm"]),
         .library(
             name: "RealmSwift",
-            targets: ["Realm", "RealmSwift"]),
+            type: .dynamic,
+            targets: ["RealmSwift"]),
     ],
     dependencies: [
-        .package(name: "RealmDatabase", url: "https://github.com/realm/realm-core", .exact(Version(coreVersionStr)!))
+        .package(url: "https://github.com/realm/realm-core.git", exact: coreVersion)
     ],
     targets: [
       .target(
             name: "Realm",
-            dependencies: [.product(name: "RealmCore", package: "RealmDatabase")],
+            dependencies: [.product(name: "RealmCore", package: "realm-core")],
             path: ".",
             exclude: [
                 "CHANGELOG.md",
                 "CONTRIBUTING.md",
                 "Carthage",
                 "Configuration",
-                "Jenkinsfile.releasability",
                 "LICENSE",
                 "Package.swift",
                 "README.md",
                 "Realm.podspec",
                 "Realm.xcodeproj",
                 "Realm/ObjectServerTests",
-                "Realm/RLMPlatform.h.in",
                 "Realm/Realm-Info.plist",
                 "Realm/Swift/RLMSupport.swift",
                 "Realm/TestUtils",
@@ -153,17 +192,21 @@ let package = Package(
                 "scripts",
             ],
             sources: [
-                "Realm/RLMEvent.mm",
                 "Realm/RLMAccessor.mm",
                 "Realm/RLMAnalytics.mm",
                 "Realm/RLMArray.mm",
                 "Realm/RLMAsymmetricObject.mm",
+                "Realm/RLMAsyncTask.mm",
                 "Realm/RLMClassInfo.mm",
                 "Realm/RLMCollection.mm",
                 "Realm/RLMConstants.m",
                 "Realm/RLMDecimal128.mm",
                 "Realm/RLMDictionary.mm",
                 "Realm/RLMEmbeddedObject.mm",
+                "Realm/RLMError.mm",
+                "Realm/RLMEvent.mm",
+                "Realm/RLMGeospatial.mm",
+                "Realm/RLMLogger.mm",
                 "Realm/RLMManagedArray.mm",
                 "Realm/RLMManagedDictionary.mm",
                 "Realm/RLMManagedSet.mm",
@@ -181,6 +224,7 @@ let package = Package(
                 "Realm/RLMRealmConfiguration.mm",
                 "Realm/RLMRealmUtil.mm",
                 "Realm/RLMResults.mm",
+                "Realm/RLMScheduler.mm",
                 "Realm/RLMSchema.mm",
                 "Realm/RLMSectionedResults.mm",
                 "Realm/RLMSet.mm",
@@ -188,9 +232,9 @@ let package = Package(
                 "Realm/RLMSwiftSupport.m",
                 "Realm/RLMSwiftValueStorage.mm",
                 "Realm/RLMThreadSafeReference.mm",
+                "Realm/RLMUUID.mm",
                 "Realm/RLMUpdateChecker.mm",
                 "Realm/RLMUtil.mm",
-                "Realm/RLMUUID.mm",
                 "Realm/RLMValue.mm",
 
                 // Sync source files
@@ -202,6 +246,7 @@ let package = Package(
                 "Realm/RLMEmailPasswordAuth.mm",
                 "Realm/RLMFindOneAndModifyOptions.mm",
                 "Realm/RLMFindOptions.mm",
+                "Realm/RLMInitialSubscriptionsConfiguration.m",
                 "Realm/RLMMongoClient.mm",
                 "Realm/RLMMongoCollection.mm",
                 "Realm/RLMNetworkTransport.mm",
@@ -217,8 +262,14 @@ let package = Package(
                 "Realm/RLMUser.mm",
                 "Realm/RLMUserAPIKey.mm"
             ],
+            resources: [
+                .copy("Realm/PrivacyInfo.xcprivacy")
+            ],
             publicHeadersPath: "include",
-            cxxSettings: cxxSettings
+            cxxSettings: cxxSettings,
+            linkerSettings: [
+                .linkedFramework("UIKit", .when(platforms: [.iOS, .macCatalyst, .tvOS, .watchOS]))
+            ]
         ),
         .target(
             name: "RealmSwift",
@@ -228,6 +279,9 @@ let package = Package(
                 "Nonsync.swift",
                 "RealmSwift-Info.plist",
                 "Tests",
+            ],
+            resources: [
+                .copy("PrivacyInfo.xcprivacy")
             ]
         ),
         .target(
@@ -235,6 +289,12 @@ let package = Package(
             dependencies: ["Realm"],
             path: "Realm/TestUtils",
             cxxSettings: testCxxSettings
+        ),
+        .target(
+            name: "RealmSwiftTestSupport",
+            dependencies: ["RealmSwift", "RealmTestSupport"],
+            path: "RealmSwift/Tests",
+            sources: ["TestUtils.swift"]
         ),
         .testTarget(
             name: "RealmTests",
@@ -268,11 +328,12 @@ let package = Package(
         ),
         .testTarget(
             name: "RealmSwiftTests",
-            dependencies: ["RealmSwift", "RealmTestSupport"],
+            dependencies: ["RealmSwift", "RealmTestSupport", "RealmSwiftTestSupport"],
             path: "RealmSwift/Tests",
             exclude: [
                 "RealmSwiftTests-Info.plist",
-                "QueryTests.swift.gyb"
+                "QueryTests.swift.gyb",
+                "TestUtils.swift"
             ]
         ),
 
@@ -283,24 +344,30 @@ let package = Package(
         objectServerTestSupportTarget(
             name: "RealmSyncTestSupport",
             dependencies: ["Realm", "RealmSwift", "RealmTestSupport"],
-            sources: ["RLMSyncTestCase.mm",
-                      "RLMUser+ObjectServerTests.mm",
-                      "RLMServerTestObjects.m"]
+            sources: [
+                "RLMServerTestObjects.m",
+                "RLMSyncTestCase.mm",
+                "RLMUser+ObjectServerTests.mm",
+                "RLMWatchTestUtility.m",
+            ]
         ),
         objectServerTestSupportTarget(
             name: "RealmSwiftSyncTestSupport",
-            dependencies: ["RealmSwift", "RealmTestSupport", "RealmSyncTestSupport"],
+            dependencies: ["RealmSwift", "RealmTestSupport", "RealmSyncTestSupport", "RealmSwiftTestSupport"],
             sources: [
+                 "RealmServer.swift",
+                 "SwiftServerObjects.swift",
                  "SwiftSyncTestCase.swift",
                  "TimeoutProxyServer.swift",
                  "WatchTestUtility.swift",
-                 "RealmServer.swift",
-                 "SwiftServerObjects.swift"
             ]
         ),
         objectServerTestTarget(
             name: "SwiftObjectServerTests",
             sources: [
+                "AsyncSyncTests.swift",
+                "ClientResetTests.swift",
+                "CombineSyncTests.swift",
                 "EventTests.swift",
                 "SwiftAsymmetricSyncServerTests.swift",
                 "SwiftCollectionSyncTests.swift",
@@ -308,7 +375,7 @@ let package = Package(
                 "SwiftMongoClientTests.swift",
                 "SwiftObjectServerPartitionTests.swift",
                 "SwiftObjectServerTests.swift",
-                "SwiftUIServerTests.swift"
+                "SwiftUIServerTests.swift",
             ]
         ),
         objectServerTestTarget(
@@ -318,9 +385,10 @@ let package = Package(
                 "RLMBSONTests.mm",
                 "RLMCollectionSyncTests.mm",
                 "RLMFlexibleSyncServerTests.mm",
+                "RLMMongoClientTests.mm",
                 "RLMObjectServerPartitionTests.mm",
                 "RLMObjectServerTests.mm",
-                "RLMWatchTestUtility.m"
+                "RLMSubscriptionTests.mm",
             ]
         )
     ],

@@ -2510,45 +2510,45 @@ static double average(NSDictionary *dictionary) {
     [managed.anyObjectIdObj addEntriesFromDictionary:@{ @"key1": objectId(1), @"key2": objectId(2) }];
     [managed.anyUUIDObj addEntriesFromDictionary:@{ @"key1": uuid(@"00000000-0000-0000-0000-000000000000"), @"key2": uuid(@"137DECC8-B300-4954-A233-F89909F4FD89") }];
 
-    uncheckedAssertEqual(1U, [[managed.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
-    uncheckedAssertEqual(1U, [[managed.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
-    uncheckedAssertEqual(1U, [[managed.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"bar"]);
-    uncheckedAssertEqual(1U, [[managed.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
-    uncheckedAssertEqual(1U, [[managed.anyBoolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
-    uncheckedAssertEqual(1U, [[managed.anyIntObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
-    uncheckedAssertEqual(1U, [[managed.anyFloatObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2.2f]);
-    uncheckedAssertEqual(1U, [[managed.anyDoubleObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2.2]);
-    uncheckedAssertEqual(1U, [[managed.anyStringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"a"]);
-    uncheckedAssertEqual(1U, [[managed.anyDataObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:data(1)]);
-    uncheckedAssertEqual(1U, [[managed.anyDateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
-    uncheckedAssertEqual(1U, [[managed.anyDecimalObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:decimal128(2)]);
-    uncheckedAssertEqual(1U, [[managed.anyUUIDObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:uuid(@"00000000-0000-0000-0000-000000000000")]);
-    uncheckedAssertEqual(0U, [[managed.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@YES]);
-    uncheckedAssertEqual(0U, [[managed.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3]);
-    uncheckedAssertEqual(0U, [[managed.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"foo"]);
-    uncheckedAssertEqual(0U, [[managed.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(2)]);
-    uncheckedAssertEqual(0U, [[managed.anyBoolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@YES]);
-    uncheckedAssertEqual(0U, [[managed.anyIntObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3]);
-    uncheckedAssertEqual(0U, [[managed.anyFloatObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3.3f]);
-    uncheckedAssertEqual(0U, [[managed.anyDoubleObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3.3]);
-    uncheckedAssertEqual(0U, [[managed.anyStringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"b"]);
-    uncheckedAssertEqual(0U, [[managed.anyDataObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:data(2)]);
-    uncheckedAssertEqual(0U, [[managed.anyDateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(2)]);
-    uncheckedAssertEqual(0U, [[managed.anyDecimalObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:decimal128(3)]);
-    uncheckedAssertEqual(0U, [[managed.anyUUIDObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:uuid(@"137DECC8-B300-4954-A233-F89909F4FD89")]);
+    uncheckedAssertEqual(0U, [[managed.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
+    uncheckedAssertEqual(0U, [[managed.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
+    uncheckedAssertEqual(0U, [[managed.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"bar"]);
+    uncheckedAssertEqual(0U, [[managed.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
+    uncheckedAssertEqual(0U, [[managed.anyBoolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
+    uncheckedAssertEqual(0U, [[managed.anyIntObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
+    uncheckedAssertEqual(0U, [[managed.anyFloatObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2.2f]);
+    uncheckedAssertEqual(0U, [[managed.anyDoubleObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2.2]);
+    uncheckedAssertEqual(0U, [[managed.anyStringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"a"]);
+    uncheckedAssertEqual(0U, [[managed.anyDataObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:data(1)]);
+    uncheckedAssertEqual(0U, [[managed.anyDateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
+    uncheckedAssertEqual(0U, [[managed.anyDecimalObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:decimal128(2)]);
+    uncheckedAssertEqual(0U, [[managed.anyUUIDObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:uuid(@"00000000-0000-0000-0000-000000000000")]);
+    uncheckedAssertEqual(1U, [[managed.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@YES]);
+    uncheckedAssertEqual(1U, [[managed.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3]);
+    uncheckedAssertEqual(1U, [[managed.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"foo"]);
+    uncheckedAssertEqual(1U, [[managed.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(2)]);
+    uncheckedAssertEqual(1U, [[managed.anyBoolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@YES]);
+    uncheckedAssertEqual(1U, [[managed.anyIntObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3]);
+    uncheckedAssertEqual(1U, [[managed.anyFloatObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3.3f]);
+    uncheckedAssertEqual(1U, [[managed.anyDoubleObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@3.3]);
+    uncheckedAssertEqual(1U, [[managed.anyStringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"b"]);
+    uncheckedAssertEqual(1U, [[managed.anyDataObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:data(2)]);
+    uncheckedAssertEqual(1U, [[managed.anyDateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(2)]);
+    uncheckedAssertEqual(1U, [[managed.anyDecimalObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:decimal128(3)]);
+    uncheckedAssertEqual(1U, [[managed.anyUUIDObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:uuid(@"137DECC8-B300-4954-A233-F89909F4FD89")]);
 
-    uncheckedAssertEqual(1U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
-    uncheckedAssertEqual(1U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
-    uncheckedAssertEqual(1U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"bar"]);
-    uncheckedAssertEqual(1U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
-    uncheckedAssertEqual(0U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
-    uncheckedAssertEqual(0U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(0U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@NO]);
+    uncheckedAssertEqual(0U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@2]);
+    uncheckedAssertEqual(0U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:@"bar"]);
+    uncheckedAssertEqual(0U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:date(1)]);
+    uncheckedAssertEqual(1U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.boolObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.intObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.stringObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
+    uncheckedAssertEqual(1U, [[optManaged.dateObj distinctResultsUsingKeyPaths:@[@"self"]] indexOfObject:(id)NSNull.null]);
 }
 
 - (void)testSort {
@@ -2769,39 +2769,39 @@ static double average(NSDictionary *dictionary) {
     [managed.anyUUIDObj addEntriesFromDictionary:@{ @"key1": uuid(@"00000000-0000-0000-0000-000000000000"), @"key2": uuid(@"137DECC8-B300-4954-A233-F89909F4FD89") }];
 
     uncheckedAssertEqualObjects([[managed.boolObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@YES, @NO]));
+                                (@[@NO, @YES]));
     uncheckedAssertEqualObjects([[optManaged.boolObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[NSNull.null, @NO]));
+                                (@[@NO, NSNull.null]));
     uncheckedAssertEqualObjects([[managed.intObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@3, @2]));
+                                (@[@2, @3]));
     uncheckedAssertEqualObjects([[optManaged.intObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[NSNull.null, @2]));
+                                (@[@2, NSNull.null]));
     uncheckedAssertEqualObjects([[managed.stringObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@"foo", @"bar"]));
+                                (@[@"bar", @"foo"]));
     uncheckedAssertEqualObjects([[optManaged.stringObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[NSNull.null, @"bar"]));
+                                (@[@"bar", NSNull.null]));
     uncheckedAssertEqualObjects([[managed.dateObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[date(2), date(1)]));
+                                (@[date(1), date(2)]));
     uncheckedAssertEqualObjects([[optManaged.dateObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[NSNull.null, date(1)]));
+                                (@[date(1), NSNull.null]));
     uncheckedAssertEqualObjects([[managed.anyBoolObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@YES, @NO]));
+                                (@[@NO, @YES]));
     uncheckedAssertEqualObjects([[managed.anyIntObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@3, @2]));
+                                (@[@2, @3]));
     uncheckedAssertEqualObjects([[managed.anyFloatObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@3.3f, @2.2f]));
+                                (@[@2.2f, @3.3f]));
     uncheckedAssertEqualObjects([[managed.anyDoubleObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@3.3, @2.2]));
+                                (@[@2.2, @3.3]));
     uncheckedAssertEqualObjects([[managed.anyStringObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[@"b", @"a"]));
+                                (@[@"a", @"b"]));
     uncheckedAssertEqualObjects([[managed.anyDataObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[data(2), data(1)]));
+                                (@[data(1), data(2)]));
     uncheckedAssertEqualObjects([[managed.anyDateObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[date(2), date(1)]));
+                                (@[date(1), date(2)]));
     uncheckedAssertEqualObjects([[managed.anyDecimalObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[decimal128(3), decimal128(2)]));
+                                (@[decimal128(2), decimal128(3)]));
     uncheckedAssertEqualObjects([[managed.anyUUIDObj sortedResultsUsingDescriptors:@[]] valueForKey:@"self"],
-                                (@[uuid(@"137DECC8-B300-4954-A233-F89909F4FD89"), uuid(@"00000000-0000-0000-0000-000000000000")]));
+                                (@[uuid(@"00000000-0000-0000-0000-000000000000"), uuid(@"137DECC8-B300-4954-A233-F89909F4FD89")]));
 
     uncheckedAssertEqualObjects([[managed.boolObj sortedResultsUsingKeyPath:@"self" ascending:NO] valueForKey:@"self"],
                                 (@[@YES, @NO]));
@@ -3137,65 +3137,65 @@ static double average(NSDictionary *dictionary) {
 
 - (void)testNotifications {
     RLMAssertThrowsWithReason([unmanaged.boolObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.boolObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.intObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.intObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.stringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.stringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.dateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.dateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.floatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.floatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.doubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.doubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.dataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.dataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.decimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.decimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.objectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.objectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.uuidObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyBoolObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyIntObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyFloatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDoubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyStringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDecimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyObjectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyUUIDObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }],
-                              @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
 }
 
 - (void)testMin {
@@ -3220,13 +3220,13 @@ static double average(NSDictionary *dictionary) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj minOfProperty:@"self"],
                               @"minOfProperty: is not supported for uuid? dictionary");
     RLMAssertThrowsWithReason([managed.boolObj minOfProperty:@"self"],
-                              @"minOfProperty: is not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
+                              @"Operation 'min' not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj minOfProperty:@"self"],
-                              @"minOfProperty: is not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
+                              @"Operation 'min' not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj minOfProperty:@"self"],
-                              @"minOfProperty: is not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
+                              @"Operation 'min' not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj minOfProperty:@"self"],
-                              @"minOfProperty: is not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
+                              @"Operation 'min' not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
 
     uncheckedAssertNil([unmanaged.intObj minOfProperty:@"self"]);
     uncheckedAssertNil([optUnmanaged.intObj minOfProperty:@"self"]);
@@ -3309,13 +3309,13 @@ static double average(NSDictionary *dictionary) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj maxOfProperty:@"self"],
                               @"maxOfProperty: is not supported for uuid? dictionary");
     RLMAssertThrowsWithReason([managed.boolObj maxOfProperty:@"self"],
-                              @"maxOfProperty: is not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
+                              @"Operation 'max' not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj maxOfProperty:@"self"],
-                              @"maxOfProperty: is not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
+                              @"Operation 'max' not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj maxOfProperty:@"self"],
-                              @"maxOfProperty: is not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
+                              @"Operation 'max' not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj maxOfProperty:@"self"],
-                              @"maxOfProperty: is not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
+                              @"Operation 'max' not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
 
     uncheckedAssertNil([unmanaged.intObj maxOfProperty:@"self"]);
     uncheckedAssertNil([optUnmanaged.intObj maxOfProperty:@"self"]);
@@ -3402,17 +3402,17 @@ static double average(NSDictionary *dictionary) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj sumOfProperty:@"self"],
                               @"sumOfProperty: is not supported for uuid? dictionary");
     RLMAssertThrowsWithReason([managed.boolObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
+                              @"Operation 'sum' not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
+                              @"Operation 'sum' not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
+                              @"Operation 'sum' not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
+                              @"Operation 'sum' not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([managed.dateObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for date dictionary 'AllPrimitiveDictionaries.dateObj'");
+                              @"Operation 'sum' not supported for date dictionary 'AllPrimitiveDictionaries.dateObj'");
     RLMAssertThrowsWithReason([optManaged.dateObj sumOfProperty:@"self"],
-                              @"sumOfProperty: is not supported for date? dictionary 'AllOptionalPrimitiveDictionaries.dateObj'");
+                              @"Operation 'sum' not supported for date? dictionary 'AllOptionalPrimitiveDictionaries.dateObj'");
 
     uncheckedAssertEqualObjects([unmanaged.intObj sumOfProperty:@"self"], @0);
     uncheckedAssertEqualObjects([optUnmanaged.intObj sumOfProperty:@"self"], @0);
@@ -3493,17 +3493,17 @@ static double average(NSDictionary *dictionary) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj averageOfProperty:@"self"],
                               @"averageOfProperty: is not supported for uuid? dictionary");
     RLMAssertThrowsWithReason([managed.boolObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
+                              @"Operation 'average' not supported for bool dictionary 'AllPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
+                              @"Operation 'average' not supported for bool? dictionary 'AllOptionalPrimitiveDictionaries.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
+                              @"Operation 'average' not supported for string dictionary 'AllPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
+                              @"Operation 'average' not supported for string? dictionary 'AllOptionalPrimitiveDictionaries.stringObj'");
     RLMAssertThrowsWithReason([managed.dateObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for date dictionary 'AllPrimitiveDictionaries.dateObj'");
+                              @"Operation 'average' not supported for date dictionary 'AllPrimitiveDictionaries.dateObj'");
     RLMAssertThrowsWithReason([optManaged.dateObj averageOfProperty:@"self"],
-                              @"averageOfProperty: is not supported for date? dictionary 'AllOptionalPrimitiveDictionaries.dateObj'");
+                              @"Operation 'average' not supported for date? dictionary 'AllOptionalPrimitiveDictionaries.dateObj'");
 
     uncheckedAssertNil([unmanaged.intObj averageOfProperty:@"self"]);
     uncheckedAssertNil([optUnmanaged.intObj averageOfProperty:@"self"]);
@@ -6093,21 +6093,16 @@ static double average(NSDictionary *dictionary) {
         RLMAssertCount(LinkToAllOptionalPrimitiveDictionaries, count, query, NSNull.null);
     };
 
-    // Core's implementation of case-insensitive comparisons only works for
-    // unaccented a-z, so the diacritic-sensitive, case-insensitive queries
-    // match half as many as they should. Many of the below tests will start
-    // failing if this is fixed.
-
     testNull(@"==", 0);
     test(@"==", @"", 4);
     test(@"==", @"a", 1);
     test(@"==", @"á", 1);
     test(@"==[c]", @"a", 2);
-    test(@"==[c]", @"á", 1);
+    test(@"==[c]", @"á", 2);
     test(@"==", @"A", 1);
     test(@"==", @"Á", 1);
     test(@"==[c]", @"A", 2);
-    test(@"==[c]", @"Á", 1);
+    test(@"==[c]", @"Á", 2);
     test(@"==[d]", @"a", 2);
     test(@"==[d]", @"á", 2);
     test(@"==[cd]", @"a", 4);
@@ -6122,11 +6117,11 @@ static double average(NSDictionary *dictionary) {
     test(@"!=", @"a", 159);
     test(@"!=", @"á", 159);
     test(@"!=[c]", @"a", 158);
-    test(@"!=[c]", @"á", 159);
+    test(@"!=[c]", @"á", 158);
     test(@"!=", @"A", 159);
     test(@"!=", @"Á", 159);
     test(@"!=[c]", @"A", 158);
-    test(@"!=[c]", @"Á", 159);
+    test(@"!=[c]", @"Á", 158);
     test(@"!=[d]", @"a", 158);
     test(@"!=[d]", @"á", 158);
     test(@"!=[cd]", @"a", 156);
@@ -6143,11 +6138,11 @@ static double average(NSDictionary *dictionary) {
     test(@"CONTAINS", @"a", 25);
     test(@"CONTAINS", @"á", 25);
     test(@"CONTAINS[c]", @"a", 50);
-    test(@"CONTAINS[c]", @"á", 25);
+    test(@"CONTAINS[c]", @"á", 50);
     test(@"CONTAINS", @"A", 25);
     test(@"CONTAINS", @"Á", 25);
     test(@"CONTAINS[c]", @"A", 50);
-    test(@"CONTAINS[c]", @"Á", 25);
+    test(@"CONTAINS[c]", @"Á", 50);
     test(@"CONTAINS[d]", @"a", 50);
     test(@"CONTAINS[d]", @"á", 50);
     test(@"CONTAINS[cd]", @"a", 100);
@@ -6160,11 +6155,11 @@ static double average(NSDictionary *dictionary) {
     test(@"BEGINSWITH", @"a", 13);
     test(@"BEGINSWITH", @"á", 13);
     test(@"BEGINSWITH[c]", @"a", 26);
-    test(@"BEGINSWITH[c]", @"á", 13);
+    test(@"BEGINSWITH[c]", @"á", 26);
     test(@"BEGINSWITH", @"A", 13);
     test(@"BEGINSWITH", @"Á", 13);
     test(@"BEGINSWITH[c]", @"A", 26);
-    test(@"BEGINSWITH[c]", @"Á", 13);
+    test(@"BEGINSWITH[c]", @"Á", 26);
     test(@"BEGINSWITH[d]", @"a", 26);
     test(@"BEGINSWITH[d]", @"á", 26);
     test(@"BEGINSWITH[cd]", @"a", 52);
@@ -6177,11 +6172,11 @@ static double average(NSDictionary *dictionary) {
     test(@"ENDSWITH", @"a", 13);
     test(@"ENDSWITH", @"á", 13);
     test(@"ENDSWITH[c]", @"a", 26);
-    test(@"ENDSWITH[c]", @"á", 13);
+    test(@"ENDSWITH[c]", @"á", 26);
     test(@"ENDSWITH", @"A", 13);
     test(@"ENDSWITH", @"Á", 13);
     test(@"ENDSWITH[c]", @"A", 26);
-    test(@"ENDSWITH[c]", @"Á", 13);
+    test(@"ENDSWITH[c]", @"Á", 26);
     test(@"ENDSWITH[d]", @"a", 26);
     test(@"ENDSWITH[d]", @"á", 26);
     test(@"ENDSWITH[cd]", @"a", 52);

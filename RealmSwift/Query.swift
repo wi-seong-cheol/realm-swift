@@ -18,9 +18,10 @@
 
 import Foundation
 import Realm
+import Realm.Private
 
 /// Enum representing an option for `String` queries.
-public struct StringOptions: OptionSet {
+public struct StringOptions: OptionSet, Sendable {
     /// :doc:
     public let rawValue: Int8
     /// :doc:
@@ -38,7 +39,7 @@ public struct StringOptions: OptionSet {
 
  With `Query` you are given the ability to create Swift style query expression that will then
  be constructed into an `NSPredicate`. The `Query` class should not be instantiated directly
- and should be only used as a paramater within a closure that takes a query expression as an argument.
+ and should be only used as a parameter within a closure that takes a query expression as an argument.
  Example:
  ```swift
  public func where(_ query: ((Query<Element>) -> Query<Element>)) -> Results<Element>
@@ -114,7 +115,7 @@ public struct Query<T> {
     private let node: QueryNode
 
     /**
-     The `Query` struct works by compunding `QueryNode`s together in a tree structure.
+     The `Query` struct works by compounding `QueryNode`s together in a tree structure.
      Each part of a query expression will be represented by one of the below static methods.
      For example in the simple expression `stringCol == 'Foo'`:
 
@@ -170,6 +171,17 @@ public struct Query<T> {
         throwRealmException("Cannot apply a keypath to \(buildPredicate(node))")
     }
 
+    private func anySubscript(appending key: CollectionSubscript) -> QueryNode {
+        if case .keyPath = node {
+            return .mapAnySubscripts(keyPathErasingAnyPrefix(), keys: [key])
+        } else if case let .mapAnySubscripts(kp, keys) = node {
+            var tmpKeys = keys
+            tmpKeys.append(key)
+            return .mapAnySubscripts(kp, keys: tmpKeys)
+        }
+        throwRealmException("Cannot add subscript to \(buildPredicate(node))")
+    }
+
     // MARK: Comparable
 
     /// :nodoc:
@@ -218,13 +230,13 @@ public struct Query<T> {
         return Query<T>()
     }
 
-    /// Constructs an NSPredicate compatibe string with its accompanying arguments.
+    /// Constructs an NSPredicate compatible string with its accompanying arguments.
     /// - Note: This is for internal use only and is exposed for testing purposes.
     public func _constructPredicate() -> (String, [Any]) {
         return buildPredicate(node)
     }
 
-    /// Creates an NSPredicate compatibe string.
+    /// Creates an NSPredicate compatible string.
     /// - Returns: A tuple containing the predicate string and an array of arguments.
 
     /// Creates an NSPredicate from the query expression.
@@ -285,6 +297,24 @@ extension Query where T == Bool {
     /// :nodoc:
     public static func || (_ lhs: Query, _ rhs: Query) -> Query<Bool> {
         .init(.comparison(operator: .or, lhs.node, rhs.node, options: []))
+    }
+}
+
+// MARK: Mixed
+
+extension Query where T == AnyRealmValue {
+    /// :nodoc:
+    public subscript(position: Int) -> Query<AnyRealmValue> {
+        .init(anySubscript(appending: .index(position)))
+
+    }
+    /// :nodoc:
+    public subscript(key: String) -> Query<AnyRealmValue> {
+        .init(anySubscript(appending: .key(key)))
+    }
+    /// Query all indexes or keys in a mixed nested collecttion.
+    public var any: Query<AnyRealmValue> {
+        .init(anySubscript(appending: .all))
     }
 }
 
@@ -824,6 +854,22 @@ extension Query where T: _HasPersistedType, T.PersistedType: _QueryNumeric {
     }
 }
 
+public extension Query where T: OptionalProtocol, T.Wrapped: EmbeddedObject {
+    /**
+    Use `geoWithin` function to filter objects whose location points lie within a certain area,
+    using a Geospatial shape (`GeoBox`, `GeoPolygon` or `GeoCircle`).
+
+     - note: There is no dedicated type to store Geospatial points, instead points should be stored as
+     [GeoJson-shaped](https://www.mongodb.com/docs/manual/reference/geojson/)
+     embedded object. Geospatial queries (`geoWithin`) can only be executed
+     in such a type of objects and will throw otherwise.
+     - see: `GeoPoint`
+    */
+    func geoWithin<U: RLMGeospatial>(_ value: U) -> Query<Bool> {
+        .init(.geoWithin(node, .constant(value)))
+    }
+}
+
 /// Tag protocol for all numeric types.
 public protocol _QueryNumeric: _RealmSchemaDiscoverable { }
 extension Int: _QueryNumeric { }
@@ -850,7 +896,7 @@ extension Optional: _QueryBinary where Wrapped: _Persistable, Wrapped.PersistedT
 
 // MARK: QueryNode -
 
-fileprivate indirect enum QueryNode {
+private indirect enum QueryNode {
     enum Operator: String {
         case or = "||"
         case and = "&&"
@@ -877,6 +923,14 @@ fileprivate indirect enum QueryNode {
 
     case subqueryCount(_ child: QueryNode)
     case mapSubscript(_ keyPath: QueryNode, key: Any)
+    case mapAnySubscripts(_ keyPath: QueryNode, keys: [CollectionSubscript])
+    case geoWithin(_ keyPath: QueryNode, _ value: QueryNode)
+}
+
+private enum CollectionSubscript {
+    case index(Int)
+    case key(String)
+    case all
 }
 
 private func buildPredicate(_ root: QueryNode, subqueryCount: Int = 0) -> (String, [Any]) {
@@ -912,9 +966,9 @@ private func buildPredicate(_ root: QueryNode, subqueryCount: Int = 0) -> (Strin
             formatStr.append(prefix)
         }
         formatStr.append("(")
-        build(lhs)
+        build(lhs, isNewNode: true)
         formatStr.append(" \(op) ")
-        build(rhs)
+        build(rhs, isNewNode: true)
         formatStr.append(")")
     }
 
@@ -926,6 +980,13 @@ private func buildPredicate(_ root: QueryNode, subqueryCount: Int = 0) -> (Strin
         formatStr.append("}")
     }
 
+    func buildBool(_ node: QueryNode, isNot: Bool = false) {
+        if case let .keyPath(kp, _) = node {
+            formatStr.append(kp.joined(separator: "."))
+            formatStr.append(" == \(isNot ? "false" : "true")")
+        }
+    }
+
     func strOptions(_ options: StringOptions) -> String {
         if options == [] {
             return ""
@@ -933,17 +994,27 @@ private func buildPredicate(_ root: QueryNode, subqueryCount: Int = 0) -> (Strin
         return "[\(options.contains(.caseInsensitive) ? "c" : "")\(options.contains(.diacriticInsensitive) ? "d" : "")]"
     }
 
-    func build(_ node: QueryNode, prefix: String? = nil) {
+    func build(_ node: QueryNode, prefix: String? = nil, isNewNode: Bool = false) {
         switch node {
         case .constant(let value):
             formatStr.append("%@")
             arguments.add(value ?? NSNull())
         case .keyPath(let kp, let options):
+            if isNewNode {
+                buildBool(node)
+                return
+            }
             if options.contains(.requiresAny) {
                 formatStr.append("ANY ")
             }
+
             formatStr.append(kp.joined(separator: "."))
         case .not(let child):
+            if case .keyPath = child,
+               isNewNode {
+                buildBool(child, isNot: true)
+                return
+            }
             build(child, prefix: "NOT ")
         case .comparison(operator: let op, let lhs, let rhs, let options):
             switch op {
@@ -967,9 +1038,26 @@ private func buildPredicate(_ root: QueryNode, subqueryCount: Int = 0) -> (Strin
             build(keyPath)
             formatStr.append("[%@]")
             arguments.add(key)
+        case .mapAnySubscripts(let keyPath, let keys):
+            build(keyPath)
+            for key in keys {
+                switch key {
+                case .index(let index):
+                    formatStr.append("[%@]")
+                    arguments.add(index)
+                case .key(let key):
+                    formatStr.append("[%@]")
+                    arguments.add(key)
+                case .all:
+                    formatStr.append("[%K]")
+                    arguments.add("#any")
+                }
+            }
+        case .geoWithin(let keyPath, let value):
+            buildExpression(keyPath, QueryNode.Operator.in.rawValue, value, prefix: nil)
         }
     }
-    build(root)
+    build(root, isNewNode: true)
     return (formatStr as String, (arguments as! [Any]))
 }
 
@@ -1009,6 +1097,10 @@ private struct SubqueryRewriter {
             return node
         case .mapSubscript:
             throwRealmException("Subqueries do not support map subscripts.")
+        case .mapAnySubscripts:
+            throwRealmException("Subqueries do not support AnyRealmValue subscripts.")
+        case .geoWithin(let keyPath, let value):
+            return .geoWithin(keyPath, value)
         }
     }
 

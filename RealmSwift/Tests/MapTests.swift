@@ -122,7 +122,7 @@ class MapTests: TestCase {
         XCTAssertFalse(obj.objectIdOpt.contains { $1 == nil })
         XCTAssertFalse(obj.uuidOpt.contains { $1 == nil })
 
-        // Map also supports itteration through `SingleMapEntry` being the element.
+        // Map also supports iteration through `SingleMapEntry` being the element.
         // We can't create this struct directly so we need to map over the contents of the dictionary
         // and test if that element exists.
         XCTAssertFalse(obj.int.map(obj.int.contains).contains(true))
@@ -458,7 +458,7 @@ class MapTests: TestCase {
         if map.realm != nil {
             // This message comes from Core and is incorrect for Dictionary.
             assertThrows((map["unassigned"] = map["0"]),
-                         reason: "Cannot add an existing managed embedded object to a List.")
+                         reason: "Cannot add an existing managed embedded object to a Dictionary.")
         }
         realm.cancelWrite()
     }
@@ -477,7 +477,7 @@ class MapTests: TestCase {
         if map.realm != nil {
             XCTAssertTrue(oldObj!!.isInvalidated)
             assertThrows(map["key"] = obj,
-                         reason: "Cannot add an existing managed embedded object to a List.")
+                         reason: "Cannot add an existing managed embedded object to a Dictionary.")
         }
 
         realm.cancelWrite()
@@ -715,7 +715,7 @@ class MapTests: TestCase {
             case .initial(let map):
                 XCTAssertNotNil(map)
                 exp.fulfill()
-            case .update(_, deletions: _, insertions: _, modifications: _):
+            case .update:
                 XCTFail("should not get here for this test")
             case .error:
                 XCTFail("should not get here for this test")
@@ -967,15 +967,73 @@ class MapTests: TestCase {
         waitForExpectations(timeout: 0.1, handler: nil)
         token.invalidate()
     }
+
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @MainActor func testObserveOnActor() async throws {
+        let map = createMapObject().swiftObjectMap
+        map["a"] = SwiftObject()
+        try realm.commitWrite()
+
+        let initialEx = expectation(description: "initial")
+        let changeEx = expectation(description: "change")
+        let token = await map.observe(keyPaths: ["intCol"], on: MainActor.shared) { _, change in
+            switch change {
+            case .initial:
+                initialEx.fulfill()
+            case .update:
+                changeEx.fulfill()
+            case .error(let error):
+                XCTFail("Unexpected error \(error)")
+            }
+        }
+        await fulfillment(of: [initialEx])
+        // A write which should not produce a notification and will over-fulfill
+        // the expectation if it does
+        try realm.write {
+            map["a"]??.boolCol = true
+        }
+        try realm.write {
+            map["a"]??.intCol += 1
+        }
+        await fulfillment(of: [changeEx])
+        token.invalidate()
+    }
+
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @MainActor func testObserveOnActorTypedKeyPath() async throws {
+        let map = createMapObject().swiftObjectMap
+        map["a"] = SwiftObject()
+        try realm.commitWrite()
+
+        let initialEx = expectation(description: "initial")
+        let changeEx = expectation(description: "change")
+        let token = await map.observe(keyPaths: [\.intCol], on: MainActor.shared) { _, change in
+            switch change {
+            case .initial:
+                initialEx.fulfill()
+            case .update:
+                changeEx.fulfill()
+            case .error(let error):
+                XCTFail("Unexpected error \(error)")
+            }
+        }
+        await fulfillment(of: [initialEx])
+        // A write which should not produce a notification and will over-fulfill
+        // the expectation if it does
+        try realm.write {
+            map["a"]??.boolCol = true
+        }
+        try realm.write {
+            map["a"]??.intCol += 1
+        }
+        await fulfillment(of: [changeEx])
+        token.invalidate()
+    }
 }
 
-// TODO: Get rid of the repetition in this test case with create map
 class MapStandaloneTests: MapTests {
-    // TODO: Have this call createMapObject
     override func createMap() -> Map<String, SwiftStringObject?> {
-        let mapObj = SwiftMapPropertyObject()
-        XCTAssertNil(mapObj.realm)
-        return mapObj.map
+        return createMapObject().map
     }
 
     override func createMapObject() -> SwiftMapPropertyObject {
@@ -1020,6 +1078,14 @@ class MapStandaloneTests: MapTests {
         let mapObj = createMap()
         assertThrows(mapObj.observe {_ in })
     }
+
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @MainActor override func testObserveOnActor() async throws {
+    }
+
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    @MainActor override func testObserveOnActorTypedKeyPath() async throws {
+    }
 }
 
 class MapNewlyAddedTests: MapTests {
@@ -1032,7 +1098,6 @@ class MapNewlyAddedTests: MapTests {
 
     override func createMapObject() -> SwiftMapPropertyObject {
         let mapObj = SwiftMapPropertyObject()
-        // This could probably use realmWithTestPath to be more explicit?
         realm.add(mapObj)
         XCTAssertNotNil(mapObj.realm)
         return mapObj
@@ -1048,7 +1113,7 @@ class MapNewlyAddedTests: MapTests {
 
 class MapNewlyCreatedTests: MapTests {
     override func createMap() -> Map<String, SwiftStringObject?> {
-        let mapObj = realm.create(SwiftMapPropertyObject.self, value: ["name", [], []])
+        let mapObj = realm.create(SwiftMapPropertyObject.self, value: ["name"])
         try! realm.commitWrite()
         realm.beginWrite()
         XCTAssertNotNil(mapObj.realm)
@@ -1064,13 +1129,13 @@ class MapNewlyCreatedTests: MapTests {
     }
 
     override func createEmbeddedMap() -> Map<String, EmbeddedTreeObject1?> {
-        return realm.create(EmbeddedParentObject.self, value: []).map
+        return realm.create(EmbeddedParentObject.self).map
     }
 }
 
 class MapRetrievedTests: MapTests {
     override func createMap() -> Map<String, SwiftStringObject?> {
-        realm.create(SwiftMapPropertyObject.self, value: ["name", [:], [:]])
+        realm.create(SwiftMapPropertyObject.self, value: ["name"])
         try! realm.commitWrite()
         let mapObj = realm.objects(SwiftMapPropertyObject.self).first!
 
@@ -1091,7 +1156,7 @@ class MapRetrievedTests: MapTests {
     }
 
     override func createEmbeddedMap() -> Map<String, EmbeddedTreeObject1?> {
-        realm.create(EmbeddedParentObject.self, value: [])
+        realm.create(EmbeddedParentObject.self)
         return realm.objects(EmbeddedParentObject.self).first!.map
     }
 }

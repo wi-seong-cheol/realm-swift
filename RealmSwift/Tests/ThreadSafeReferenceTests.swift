@@ -31,9 +31,9 @@ class ThreadSafeReferenceTests: TestCase {
 
     func testInvalidThreadSafeReferenceConstruction() {
         let stringObject = SwiftStringObject()
-        let arrayParent = SwiftArrayPropertyObject(value: ["arrayObject", [["a"]], []])
+        let arrayParent = SwiftArrayPropertyObject(value: ["arrayObject", [["a"]]])
         let arrayObject = arrayParent.array
-        let setParent = SwiftMutableSetPropertyObject(value: ["setObject", [["a"]], []])
+        let setParent = SwiftMutableSetPropertyObject(value: ["setObject", [["a"]]])
         let setObject = setParent.set
 
         assertThrows(ThreadSafeReference(to: stringObject), reason: "Cannot construct reference to unmanaged object")
@@ -81,8 +81,11 @@ class ThreadSafeReferenceTests: TestCase {
         let ref1 = ThreadSafeReference(to: intObject)
         let ref2 = ThreadSafeReference(to: intObject)
         XCTAssertEqual(0, intObject.intCol)
-        try! realm.write {
-            realm.delete(intObject)
+        dispatchSyncNewThread {
+            let realm = try! Realm()
+            try! realm.write {
+                realm.deleteAll()
+            }
         }
         dispatchSyncNewThread {
             let realm = try! Realm()

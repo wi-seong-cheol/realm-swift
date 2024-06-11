@@ -22,6 +22,11 @@ import Realm
 
 final class SwiftStringObject: Object {
     @objc dynamic var stringCol = ""
+
+    convenience init(stringCol: String) {
+        self.init()
+        self.stringCol = stringCol
+    }
 }
 
 class ModernSwiftStringObject: Object {
@@ -76,7 +81,7 @@ class SwiftObject: Object {
     @objc dynamic var floatCol = 1.23 as Float
     @objc dynamic var doubleCol = 12.3
     @objc dynamic var stringCol = "a"
-    @objc dynamic var binaryCol = "a".data(using: String.Encoding.utf8)!
+    @objc dynamic var binaryCol = Data("a".utf8)
     @objc dynamic var dateCol = Date(timeIntervalSince1970: 1)
     @objc dynamic var decimalCol = Decimal128("123e4")
     @objc dynamic var objectIdCol = ObjectId("1234567890ab1234567890ab")
@@ -99,15 +104,12 @@ class SwiftObject: Object {
             "floatCol": 1.23 as Float,
             "doubleCol": 12.3,
             "stringCol": "a",
-            "binaryCol": "a".data(using: String.Encoding.utf8)!,
+            "binaryCol": Data("a".utf8),
             "dateCol": Date(timeIntervalSince1970: 1),
             "decimalCol": Decimal128("123e4"),
             "objectIdCol": ObjectId("1234567890ab1234567890ab"),
             "objectCol": [false],
-            "uuidCol": UUID(uuidString: "137decc8-b300-4954-a233-f89909f4fd89")!,
-            "arrayCol": [],
-            "setCol": [],
-            "mapCol": [:]
+            "uuidCol": UUID(uuidString: "137decc8-b300-4954-a233-f89909f4fd89")!
         ]
     }
 }
@@ -252,7 +254,7 @@ class SwiftImplicitlyUnwrappedOptionalObject: Object {
 class SwiftOptionalDefaultValuesObject: Object {
     @objc dynamic var optNSStringCol: NSString? = "A"
     @objc dynamic var optStringCol: String? = "B"
-    @objc dynamic var optBinaryCol: Data? = "C".data(using: String.Encoding.utf8)! as Data
+    @objc dynamic var optBinaryCol: Data? = Data("C".utf8)
     @objc dynamic var optDateCol: Date? = Date(timeIntervalSince1970: 10)
     @objc dynamic var optDecimalCol: Decimal128? = "123"
     @objc dynamic var optObjectIdCol: ObjectId? = ObjectId("1234567890ab1234567890ab")
@@ -271,7 +273,7 @@ class SwiftOptionalDefaultValuesObject: Object {
         return [
             "optNSStringCol": "A",
             "optStringCol": "B",
-            "optBinaryCol": "C".data(using: String.Encoding.utf8)!,
+            "optBinaryCol": Data("C".utf8),
             "optDateCol": Date(timeIntervalSince1970: 10),
             "optDecimalCol": Decimal128("123"),
             "optObjectIdCol": ObjectId("1234567890ab1234567890ab"),
@@ -293,7 +295,7 @@ class SwiftOptionalIgnoredPropertiesObject: Object {
 
     @objc dynamic var optNSStringCol: NSString? = "A"
     @objc dynamic var optStringCol: String? = "B"
-    @objc dynamic var optBinaryCol: Data? = "C".data(using: String.Encoding.utf8)! as Data
+    @objc dynamic var optBinaryCol: Data? = Data("C".utf8)
     @objc dynamic var optDateCol: Date? = Date(timeIntervalSince1970: 10)
     @objc dynamic var optDecimalCol: Decimal128? = "123"
     @objc dynamic var optObjectIdCol: ObjectId? = ObjectId("1234567890ab1234567890ab")
@@ -672,7 +674,6 @@ class SwiftObjectiveCTypesObject: Object {
 }
 
 class SwiftComputedPropertyNotIgnoredObject: Object {
-    // swiftlint:disable:next identifier_name
     @objc dynamic var _urlBacking = ""
 
     // Dynamic; no ivar
@@ -767,7 +768,7 @@ class SwiftRenamedProperties1: Object {
     let linking2 = LinkingObjects(fromType: LinkToSwiftRenamedProperties2.self, property: "linkD")
 
     override class func _realmObjectName() -> String { return "Swift Renamed Properties" }
-    override class func _realmColumnNames() -> [String: String] {
+    override class func propertiesMapping() -> [String: String] {
         return ["propA": "prop 1", "propB": "prop 2"]
     }
 }
@@ -779,7 +780,7 @@ class SwiftRenamedProperties2: Object {
     let linking2 = LinkingObjects(fromType: LinkToSwiftRenamedProperties2.self, property: "linkD")
 
     override class func _realmObjectName() -> String { return "Swift Renamed Properties" }
-    override class func _realmColumnNames() -> [String: String] {
+    override class func propertiesMapping() -> [String: String] {
         return ["propC": "prop 1", "propD": "prop 2"]
     }
 }
@@ -791,7 +792,7 @@ class LinkToSwiftRenamedProperties1: Object {
     let set1 = MutableSet<SwiftRenamedProperties1>()
 
     override class func _realmObjectName() -> String { return "Link To Swift Renamed Properties" }
-    override class func _realmColumnNames() -> [String: String] {
+    override class func propertiesMapping() -> [String: String] {
         return ["linkA": "link 1", "linkB": "link 2", "array1": "array", "set1": "set"]
     }
 }
@@ -803,7 +804,7 @@ class LinkToSwiftRenamedProperties2: Object {
     let set2 = MutableSet<SwiftRenamedProperties2>()
 
     override class func _realmObjectName() -> String { return "Link To Swift Renamed Properties" }
-    override class func _realmColumnNames() -> [String: String] {
+    override class func propertiesMapping() -> [String: String] {
         return ["linkC": "link 1", "linkD": "link 2", "array2": "array", "set2": "set"]
     }
 }
@@ -851,4 +852,28 @@ class EmbeddedTreeObject3: EmbeddedObject, EmbeddedTreeObject {
 
     let parent3 = LinkingObjects(fromType: EmbeddedTreeObject2.self, property: "child")
     let parent4 = LinkingObjects(fromType: EmbeddedTreeObject2.self, property: "children")
+}
+
+class ObjectWithNestedEmbeddedObject: Object {
+    @objc dynamic var value = 0
+    @objc dynamic var inner: NestedInnerClass?
+
+    @objc(ObjectWithNestedEmbeddedObject_NestedInnerClass)
+    class NestedInnerClass: EmbeddedObject {
+        @objc dynamic var value = 0
+    }
+}
+
+@objc(PrivateObjectSubclass)
+private class PrivateObjectSubclass: Object {
+    @objc dynamic var value = 0
+}
+
+class LinkToOnlyComputed: Object {
+    @Persisted var value: Int = 0
+    @Persisted var link: OnlyComputedProps?
+}
+
+class OnlyComputedProps: Object {
+    @Persisted(originProperty: "link") var backlinks: LinkingObjects<LinkToOnlyComputed>
 }

@@ -27,7 +27,7 @@ import Realm
 // The functions don't need to be documented here because Xcode/DocC inherit
 // the documentation from the RealmCollection protocol definition, and jazzy
 // excludes this file entirely.
-internal protocol RealmCollectionImpl: RealmCollection where Index == Int, SubSequence == Slice<Self> {
+internal protocol RealmCollectionImpl: RealmCollection where Index == Int, SubSequence == Slice<Self>, Iterator == RLMIterator<Element> {
     var collection: RLMCollection { get }
     init(collection: RLMCollection)
 }
@@ -102,36 +102,38 @@ extension RealmCollectionImpl {
         return collection.setValue(value, forKey: key)
     }
 
-    public func observe(keyPaths: [String]? = nil,
-                        on queue: DispatchQueue? = nil,
+    public func observe(keyPaths: [String]?,
+                        on queue: DispatchQueue?,
                         _ block: @escaping (RealmCollectionChange<Self>) -> Void) -> NotificationToken {
-        return collection.addNotificationBlock(wrapObserveBlock(block), keyPaths: keyPaths, queue: queue)
-    }
-    public func observe(on queue: DispatchQueue? = nil,
-                        _ block: @escaping (RealmCollectionChange<Self>) -> Void) -> NotificationToken {
-        return collection.addNotificationBlock(wrapObserveBlock(block), keyPaths: nil, queue: queue)
-    }
-    public func observe<T: ObjectBase>(keyPaths: [PartialKeyPath<T>],
-                                       on queue: DispatchQueue? = nil,
-                                       _ block: @escaping (RealmCollectionChange<Self>) -> Void) -> NotificationToken {
-        return collection.addNotificationBlock(wrapObserveBlock(block), keyPaths: keyPaths.map(_name(for:)), queue: queue)
-    }
-    // We want to pass the same object instance to the change callback each time.
-    // If the callback is being called on the source thread the instance should
-    // be `self`, but if it's on a different thread it needs to be a new Swift
-    // wrapper for the obj-c type, which we'll construct the first time the
-    // callback is called.
-    internal typealias ObjcCollectionChange = (RLMCollection?, RLMCollectionChange?, Error?) -> Void
-    internal func wrapObserveBlock(_ block: @escaping (RealmCollectionChange<Self>) -> Void) -> ObjcCollectionChange {
+        // We want to pass the same object instance to the change callback each time.
+        // If the callback is being called on the source thread the instance should
+        // be `self`, but if it's on a different thread it needs to be a new Swift
+        // wrapper for the obj-c type, which we'll construct the first time the
+        // callback is called.
         var col: Self?
-        return { collection, change, error in
+        func wrapped(collection: RLMCollection?, change: RLMCollectionChange?, error: Error?) {
             if col == nil, let collection = collection {
                 col = self.collection === collection ? self : Self(collection: collection)
             }
-            block(RealmCollectionChange.fromObjc(value: col, change: change, error: error))
+            block(.init(value: col, change: change, error: error))
         }
+        return collection.addNotificationBlock(wrapped, keyPaths: keyPaths, queue: queue)
     }
 
+    @available(macOS 10.15, tvOS 13.0, iOS 13.0, watchOS 6.0, *)
+    @_unsafeInheritExecutor
+    public func observe<A: Actor>(
+        keyPaths: [String]?, on actor: A,
+        _ block: @Sendable @escaping (isolated A, RealmCollectionChange<Self>) -> Void
+    ) async -> NotificationToken {
+        await with(self, on: actor) { actor, collection in
+            collection.observe(keyPaths: keyPaths, on: nil) { change in
+                assumeOnActorExecutor(actor) { actor in
+                    block(actor, change)
+                }
+            }
+        } ?? NotificationToken()
+    }
 
     public var isFrozen: Bool {
         return collection.isFrozen
@@ -141,10 +143,6 @@ extension RealmCollectionImpl {
     }
     public func thaw() -> Self? {
         return Self(collection: collection.thaw())
-    }
-
-    public func makeIterator() -> RLMIterator<Element> {
-        return RLMIterator(collection: collection)
     }
 
     public func sectioned<Key: _Persistable>(sortDescriptors: [SortDescriptor],
@@ -163,11 +161,60 @@ extension RealmCollectionImpl {
 // A helper protocol which lets us check for Optional in where clauses
 public protocol OptionalProtocol {
     associatedtype Wrapped
-    // swiftlint:disable:next identifier_name
     func _rlmInferWrappedType() -> Wrapped
 }
 
 extension Optional: OptionalProtocol {
-    // swiftlint:disable:next identifier_name
     public func _rlmInferWrappedType() -> Wrapped { return self! }
+}
+
+// `with(object, on: actor) { object, actor in ... }` hands the object over
+// to the given actor and then invokes the callback within the actor.
+// This might make sense to expose publicly.
+@available(macOS 10.15, tvOS 13.0, iOS 13.0, watchOS 6.0, *)
+@_unsafeInheritExecutor
+internal func with<A: Actor, Value: ThreadConfined, Return: Sendable>(
+    _ value: Value,
+    on actor: A,
+    _ block: @Sendable @escaping (isolated A, Value) async throws -> Return
+) async rethrows -> Return? {
+    if value.realm == nil {
+        let unchecked = Unchecked(wrappedValue: value)
+        return try await actor.invoke { actor in
+            if !Task.isCancelled {
+#if swift(>=5.10)
+                // As of Swift 5.10 the compiler incorrectly thinks that this
+                // is an async hop even though the isolation context is
+                // unchanged. This is fixed in 5.11.
+                nonisolated(unsafe) let value = unchecked.wrappedValue
+                return try await block(actor, value)
+#else
+                return try await block(actor, unchecked.wrappedValue)
+#endif
+            }
+            return nil
+        }
+    }
+
+    let tsr = ThreadSafeReference(to: value)
+    let config = Unchecked(wrappedValue: value.realm!.rlmRealm.configuration)
+    return try await actor.invoke { actor in
+        if Task.isCancelled {
+            return nil
+        }
+        let scheduler = RLMScheduler.actor(actor, invoke: actor.invoke, verify: actor.verifier())
+        let realm = Realm(try! RLMRealm(configuration: config.wrappedValue, confinedTo: scheduler))
+        guard let value = tsr.resolve(in: realm) else {
+            return nil
+        }
+#if swift(>=5.10)
+        // As above; this is safe but 5.10's sendability checking can't prove it
+        // nonisolated(unsafe) can't be applied to a let in guard so we need
+        // a second variable
+        nonisolated(unsafe) let v = value
+        return try await block(actor, v)
+#else
+        return try await block(actor, value)
+#endif
+    }
 }

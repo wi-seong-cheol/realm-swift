@@ -20,7 +20,7 @@
 
 @class RLMSchema, RLMEventConfiguration;
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability)
 
 @interface RLMRealmConfiguration ()
 
@@ -30,10 +30,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) RLMSchema *customSchema;
 @property (nonatomic, copy) NSString *pathOnDisk;
 @property (nonatomic, retain, nullable) RLMEventConfiguration *eventConfiguration;
-
-// Flexible Sync
-@property (nonatomic, readwrite, nullable) RLMFlexibleSyncInitialSubscriptionsBlock initialSubscriptions;
-@property (nonatomic, readwrite) BOOL rerunOnOpen;
+@property (nonatomic, nullable) Class migrationObjectClass;
+@property (nonatomic) bool disableAutomaticChangeNotifications;
 
 // Get the default configuration without copying it
 + (RLMRealmConfiguration *)rawDefaultConfiguration;
@@ -47,4 +45,4 @@ NS_ASSUME_NONNULL_BEGIN
 FOUNDATION_EXTERN NSString *RLMRealmPathForFile(NSString *fileName);
 FOUNDATION_EXTERN NSString *RLMRealmPathForFileAndBundleIdentifier(NSString *fileName, NSString *mainBundleIdentifier);
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability)

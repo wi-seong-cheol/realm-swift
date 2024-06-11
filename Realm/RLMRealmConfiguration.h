@@ -16,12 +16,11 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#import <Foundation/Foundation.h>
 #import <Realm/RLMRealm.h>
 
 @class RLMEventConfiguration, RLMSyncConfiguration;
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 /**
  A block called when opening a Realm for the first time during the life
@@ -32,13 +31,8 @@ NS_ASSUME_NONNULL_BEGIN
  Return `YES` to indicate that an attempt to compact the file should be made.
  The compaction will be skipped if another process is accessing it.
  */
+RLM_SWIFT_SENDABLE
 typedef BOOL (^RLMShouldCompactOnLaunchBlock)(NSUInteger totalBytes, NSUInteger bytesUsed);
-
-/**
- A block which receives a subscription set instance, that can be used to add an initial set of subscriptions which will be executed
- when the Realm is first opened.
- */
-typedef void(^RLMFlexibleSyncInitialSubscriptionsBlock)(RLMSyncSubscriptionSet * _Nonnull subscriptions);
 
 /**
  An `RLMRealmConfiguration` instance describes the different options used to
@@ -78,9 +72,9 @@ typedef void(^RLMFlexibleSyncInitialSubscriptionsBlock)(RLMSyncSubscriptionSet *
 /// setting one of the two properties will automatically nil out the other.
 @property (nonatomic, copy, nullable) NSURL *fileURL;
 
-/// A string used to identify a particular in-memory Realm. Mutually exclusive with `fileURL`,
-/// `seedFilePath`and `syncConfiguration`;
-/// setting any one of the three properties will automatically nil out the other two.
+/// A string used to identify a particular in-memory Realm. Mutually exclusive
+/// with `fileURL` and `seedFilePath`.
+/// Setting an in-memory identifier will automatically nil out the other two.
 @property (nonatomic, copy, nullable) NSString *inMemoryIdentifier;
 
 /// A 64-byte key to use to encrypt the data, or `nil` if encryption is not enabled.
@@ -158,7 +152,7 @@ typedef void(^RLMFlexibleSyncInitialSubscriptionsBlock)(RLMSyncSubscriptionSet *
  number of versions will instead throw an exception. This can be used with a
  low value during development to help identify places that may be problematic,
  or in production use to cause the app to crash rather than produce a Realm
- file which is too large to be oened.
+ file which is too large to be opened.
 
  */
 @property (nonatomic) NSUInteger maximumNumberOfActiveVersions;
@@ -193,4 +187,4 @@ typedef void(^RLMFlexibleSyncInitialSubscriptionsBlock)(RLMSyncSubscriptionSet *
 
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

@@ -352,12 +352,12 @@ static double average(NSDictionary *dictionary) {
 }
 
 - (void)testNotifications {
-    %unman RLMAssertThrowsWithReason([$dictionary addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], ^n @"This method may only be called on RLMDictionary instances retrieved from an RLMRealm");
+    %unman RLMAssertThrowsWithReason([$dictionary addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], ^n @"Change notifications are only supported on managed collections.");
 }
 
 - (void)testMin {
     %noany %nominmax %unman RLMAssertThrowsWithReason([$dictionary minOfProperty:@"self"], ^n @"minOfProperty: is not supported for $type dictionary");
-    %noany %nominmax %man RLMAssertThrowsWithReason([$dictionary minOfProperty:@"self"], ^n @"minOfProperty: is not supported for $type dictionary '$class.$prop'");
+    %noany %nominmax %man RLMAssertThrowsWithReason([$dictionary minOfProperty:@"self"], ^n @"Operation 'min' not supported for $type dictionary '$class.$prop'");
 
     %minmax uncheckedAssertNil([$dictionary minOfProperty:@"self"]);
 
@@ -368,7 +368,7 @@ static double average(NSDictionary *dictionary) {
 
 - (void)testMax {
     %noany %nominmax %unman RLMAssertThrowsWithReason([$dictionary maxOfProperty:@"self"], ^n @"maxOfProperty: is not supported for $type dictionary");
-    %noany %nominmax %man RLMAssertThrowsWithReason([$dictionary maxOfProperty:@"self"], ^n @"maxOfProperty: is not supported for $type dictionary '$class.$prop'");
+    %noany %nominmax %man RLMAssertThrowsWithReason([$dictionary maxOfProperty:@"self"], ^n @"Operation 'max' not supported for $type dictionary '$class.$prop'");
 
     %minmax uncheckedAssertNil([$dictionary maxOfProperty:@"self"]);
 
@@ -380,7 +380,7 @@ static double average(NSDictionary *dictionary) {
 
 - (void)testSum {
     %noany %nosum %unman RLMAssertThrowsWithReason([$dictionary sumOfProperty:@"self"], ^n @"sumOfProperty: is not supported for $type dictionary");
-    %noany %nosum %man RLMAssertThrowsWithReason([$dictionary sumOfProperty:@"self"], ^n @"sumOfProperty: is not supported for $type dictionary '$class.$prop'");
+    %noany %nosum %man RLMAssertThrowsWithReason([$dictionary sumOfProperty:@"self"], ^n @"Operation 'sum' not supported for $type dictionary '$class.$prop'");
 
     %sum uncheckedAssertEqualObjects([$dictionary sumOfProperty:@"self"], @0);
 
@@ -391,7 +391,7 @@ static double average(NSDictionary *dictionary) {
 
 - (void)testAverage {
     %noany %noavg %unman RLMAssertThrowsWithReason([$dictionary averageOfProperty:@"self"], ^n @"averageOfProperty: is not supported for $type dictionary");
-    %noany %noavg %man RLMAssertThrowsWithReason([$dictionary averageOfProperty:@"self"], ^n @"averageOfProperty: is not supported for $type dictionary '$class.$prop'");
+    %noany %noavg %man RLMAssertThrowsWithReason([$dictionary averageOfProperty:@"self"], ^n @"Operation 'average' not supported for $type dictionary '$class.$prop'");
 
     %avg uncheckedAssertNil([$dictionary averageOfProperty:@"self"]);
 
@@ -1048,21 +1048,16 @@ static double average(NSDictionary *dictionary) {
         RLMAssertCount(LinkToAllOptionalPrimitiveDictionaries, count, query, NSNull.null);
     };
 
-    // Core's implementation of case-insensitive comparisons only works for
-    // unaccented a-z, so the diacritic-sensitive, case-insensitive queries
-    // match half as many as they should. Many of the below tests will start
-    // failing if this is fixed.
-
     testNull(@"==", 0);
     test(@"==", @"", 4);
     test(@"==", @"a", 1);
     test(@"==", @"á", 1);
     test(@"==[c]", @"a", 2);
-    test(@"==[c]", @"á", 1);
+    test(@"==[c]", @"á", 2);
     test(@"==", @"A", 1);
     test(@"==", @"Á", 1);
     test(@"==[c]", @"A", 2);
-    test(@"==[c]", @"Á", 1);
+    test(@"==[c]", @"Á", 2);
     test(@"==[d]", @"a", 2);
     test(@"==[d]", @"á", 2);
     test(@"==[cd]", @"a", 4);
@@ -1077,11 +1072,11 @@ static double average(NSDictionary *dictionary) {
     test(@"!=", @"a", 159);
     test(@"!=", @"á", 159);
     test(@"!=[c]", @"a", 158);
-    test(@"!=[c]", @"á", 159);
+    test(@"!=[c]", @"á", 158);
     test(@"!=", @"A", 159);
     test(@"!=", @"Á", 159);
     test(@"!=[c]", @"A", 158);
-    test(@"!=[c]", @"Á", 159);
+    test(@"!=[c]", @"Á", 158);
     test(@"!=[d]", @"a", 158);
     test(@"!=[d]", @"á", 158);
     test(@"!=[cd]", @"a", 156);
@@ -1098,11 +1093,11 @@ static double average(NSDictionary *dictionary) {
     test(@"CONTAINS", @"a", 25);
     test(@"CONTAINS", @"á", 25);
     test(@"CONTAINS[c]", @"a", 50);
-    test(@"CONTAINS[c]", @"á", 25);
+    test(@"CONTAINS[c]", @"á", 50);
     test(@"CONTAINS", @"A", 25);
     test(@"CONTAINS", @"Á", 25);
     test(@"CONTAINS[c]", @"A", 50);
-    test(@"CONTAINS[c]", @"Á", 25);
+    test(@"CONTAINS[c]", @"Á", 50);
     test(@"CONTAINS[d]", @"a", 50);
     test(@"CONTAINS[d]", @"á", 50);
     test(@"CONTAINS[cd]", @"a", 100);
@@ -1115,11 +1110,11 @@ static double average(NSDictionary *dictionary) {
     test(@"BEGINSWITH", @"a", 13);
     test(@"BEGINSWITH", @"á", 13);
     test(@"BEGINSWITH[c]", @"a", 26);
-    test(@"BEGINSWITH[c]", @"á", 13);
+    test(@"BEGINSWITH[c]", @"á", 26);
     test(@"BEGINSWITH", @"A", 13);
     test(@"BEGINSWITH", @"Á", 13);
     test(@"BEGINSWITH[c]", @"A", 26);
-    test(@"BEGINSWITH[c]", @"Á", 13);
+    test(@"BEGINSWITH[c]", @"Á", 26);
     test(@"BEGINSWITH[d]", @"a", 26);
     test(@"BEGINSWITH[d]", @"á", 26);
     test(@"BEGINSWITH[cd]", @"a", 52);
@@ -1132,11 +1127,11 @@ static double average(NSDictionary *dictionary) {
     test(@"ENDSWITH", @"a", 13);
     test(@"ENDSWITH", @"á", 13);
     test(@"ENDSWITH[c]", @"a", 26);
-    test(@"ENDSWITH[c]", @"á", 13);
+    test(@"ENDSWITH[c]", @"á", 26);
     test(@"ENDSWITH", @"A", 13);
     test(@"ENDSWITH", @"Á", 13);
     test(@"ENDSWITH[c]", @"A", 26);
-    test(@"ENDSWITH[c]", @"Á", 13);
+    test(@"ENDSWITH[c]", @"Á", 26);
     test(@"ENDSWITH[d]", @"a", 26);
     test(@"ENDSWITH[d]", @"á", 26);
     test(@"ENDSWITH[cd]", @"a", 52);

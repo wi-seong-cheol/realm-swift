@@ -16,7 +16,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
-#import <Foundation/Foundation.h>
+#import <Realm/RLMConstants.h>
 
 @class RLMObjectId;
 
@@ -44,7 +44,7 @@ typedef NS_ENUM(NSUInteger, RLMSyncSubscriptionState) {
     RLMSyncSubscriptionStateSuperseded
 };
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 /**
  `RLMSyncSubscription` is  used to define a Flexible Sync subscription obtained from querying a
@@ -117,17 +117,37 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)write:(__attribute__((noescape)) void(^)(void))block __attribute__((unavailable("Renamed to -update")));
 
 /**
- Synchronously performs any transactions (add/remove/update) to the subscription set within the block,
- this will not wait for the server to acknowledge and see all the data associated with this collection of subscriptions,
- and will return after committing the subscription transactions.
+ Synchronously performs any transactions (add/remove/update) to the subscription set within the block. The `onComplete` block is executed after waiting for associated data to be downloaded from the server.
 
  @param block The block containing actions to perform to the subscription set.
- @param onComplete The block called upon synchronization of subscriptions to the server. Otherwise
-                   an `Error`describing what went wrong will be returned by the block
+ @param onComplete A block which is called upon synchronization of
+                   data from the server. The block will be passed `nil`
+                   if the update succeeded, and an error describing the problem
+                   otherwise.
  */
-- (void)update:(__attribute__((noescape)) void(^)(void))block onComplete:(void(^)(NSError * _Nullable))onComplete;
+- (void)update:(__attribute__((noescape)) void(^)(void))block
+    onComplete:(nullable void(^RLM_SWIFT_SENDABLE)(NSError *_Nullable))onComplete
+    __attribute__((swift_async(not_swift_private, 2)))
+    __attribute__((swift_attr("@_unsafeInheritExecutor")));
 /// :nodoc:
-- (void)write:(__attribute__((noescape)) void(^)(void))block onComplete:(void(^)(NSError * _Nullable))onComplete __attribute__((unavailable("Renamed to -update:onComplete.")));
+- (void)write:(__attribute__((noescape)) void(^)(void))block
+   onComplete:(void(^)(NSError * _Nullable))onComplete __attribute__((unavailable("Renamed to -update:onComplete.")));
+
+/**
+ Synchronously performs any transactions (add/remove/update) to the subscription set within the block. The `onComplete` block is executed after waiting for associated data to be downloaded from the server.
+
+ @param block The block containing actions to perform to the subscription set.
+ @param queue The serial queue to deliver notifications to.
+ @param onComplete A block which is called upon synchronization of
+                   data from the server. The block will be passed `nil`
+                   if the update succeeded, and an error describing the problem
+                   otherwise.
+ */
+ - (void)update:(__attribute__((noescape)) void(^)(void))block
+          queue:(nullable dispatch_queue_t)queue
+     onComplete:(void(^)(NSError *))onComplete
+__attribute__((swift_attr("@_unsafeInheritExecutor")));
+
 
 #pragma mark - Find subscription
 
@@ -291,6 +311,15 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)removeAllSubscriptions;
 
 /**
+ Removes all subscriptions without a name from the subscription set.
+
+ @warning This method may only be called during a write subscription block.
+ @warning Removing all subscriptions will result in an error if no new subscription is added. Server should
+          acknowledge at least one subscription.
+ */
+ - (void)removeAllUnnamedSubscriptions;
+
+/**
  Removes all subscription with the specified class name.
 
  @param className The class name for the model class to be queried.
@@ -337,4 +366,4 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

@@ -1,4 +1,9 @@
-![Realm](https://github.com/realm/realm-swift/raw/master/logo.png)
+<picture>
+    <source srcset="./media/logo-dark.svg" media="(prefers-color-scheme: dark)" alt="realm by MongoDB">
+    <img src="./media/logo.svg" alt="realm by MongoDB">
+</picture>
+
+# About Realm Database
 
 Realm is a mobile database that runs directly inside phones, tablets or wearables.
 This repository holds the source code for the iOS, macOS, tvOS & watchOS versions of Realm Swift & Realm Objective-C.
@@ -6,8 +11,9 @@ This repository holds the source code for the iOS, macOS, tvOS & watchOS version
 ## Why Use Realm
 
 * **Intuitive to Developers:** Realm’s object-oriented data model is simple to learn, doesn’t need an ORM, and lets you write less code.
-* **Designed for Offline Use:** Realm’s local database persists data on-disk, so apps work as well offline as they do online.
 * **Built for Mobile:** Realm is fully-featured, lightweight, and efficiently uses memory, disk space, and battery life.
+* **Designed for Offline Use:** Realm’s local database persists data on-disk, so apps work as well offline as they do online.
+* **[MongoDB Atlas Device Sync](https://www.mongodb.com/docs/atlas/app-services/sync/)**: Makes it simple to keep data in sync across users, devices, and your backend in real-time. Get started for free with [a template application](https://github.com/mongodb/template-app-swiftui-todo) and [create the cloud backend](http://mongodb.com/realm/register?utm_medium=github_atlas_CTA&utm_source=realm_swift_github).
 
 ## Object-Oriented: Streamline Your Code
 
@@ -34,7 +40,7 @@ print("name of dog: \(dog.name)")
 
 // Get the default Realm
 let realm = try! Realm()
-// Persist your data easily with a write transaction 
+// Persist your data easily with a write transaction
 try! realm.write {
     realm.add(dog)
 }
@@ -79,7 +85,7 @@ Realm integrates directly with SwiftUI, updating your views so you don't have to
 ```swift
 struct ContactsView: View {
     @ObservedResults(Person.self) var persons
-    
+
     var body: some View {
         List {
             ForEach(persons) { person in
@@ -112,19 +118,19 @@ let realm = try Realm(configuration: config)
 // Use the Realm as normal
 let dogs = realm.objects(Dog.self).filter("name contains 'Fido'")
 ```
-## Data Sync
-The [Device Sync](https://www.mongodb.com/atlas/app-services/device-sync) service makes it simple to keep data in sync across users, devices, and your backend in real-time.
 
 ## Getting Started
 
 We support installing Realm via Swift Package Manager, CocoaPods, Carthage, or by importing a dynamic XCFramework.
 
-For more information, see the detailed instructions in our [docs](https://docs.mongodb.com/realm/sdk/ios/install/).
+For more information, see the detailed instructions in our [docs](https://www.mongodb.com/docs/atlas/device-sdks/sdk/swift/install/).
+
+Interested in getting started for free with [a template application](https://github.com/mongodb/template-app-swiftui-todo) that includes a cloud backend and Sync? [Create a MongoDB Atlas Account](http://mongodb.com/realm/register?utm_medium=github_atlas_CTA&utm_source=realm_swift_github).
 
 ## Documentation
 
-The documentation can be found at [docs.mongodb.com/realm/sdk/ios/](https://docs.mongodb.com/realm/sdk/ios/).  
-The API reference is located at [docs.mongodb.com/realm-sdks/swift/latest/](https://docs.mongodb.com/realm-sdks/swift/latest/)
+The documentation can be found at [mongodb.com/docs/atlas/device-sdks/sdk/swift/](https://www.mongodb.com/docs/atlas/device-sdks/sdk/swift//).
+The API reference is located at [mongodb.com/docs/realm-sdks/swift/latest/](https://www.mongodb.com/docs/realm-sdks/swift/latest/)
 
 ## Getting Help
 
@@ -138,10 +144,12 @@ In case you don't want to use the precompiled version, you can build Realm yours
 
 Prerequisites:
 
-* Building Realm requires Xcode 11.x or newer.
+* Building Realm requires Xcode 14.1 or newer.
 * Building Realm documentation requires [jazzy](https://github.com/realm/jazzy)
 
-Once you have all the necessary prerequisites, building Realm.framework just takes a single command: `sh build.sh build`. You'll need an internet connection the first time you build Realm to download the core binary.
+Once you have all the necessary prerequisites, building Realm just takes a single command: `sh build.sh build`.
+You'll need an internet connection the first time you build Realm to download the core binary.
+This will produce Realm.xcframework and RealmSwift.xcframework in `build/Release/`.
 
 Run `sh build.sh help` to see all the actions you can perform (build ios/osx, generate docs, test, etc.).
 
@@ -157,7 +165,7 @@ unacceptable behavior to [community-conduct@mongodb.com](mailto:community-conduc
 
 ## License
 
-Realm Objective-C & Realm Swift are published under the Apache 2.0 license.  
+Realm Objective-C & Realm Swift are published under the Apache 2.0 license.
 Realm Core is also published under the Apache 2.0 license and is available
 [here](https://github.com/realm/realm-core).
 

@@ -18,7 +18,7 @@
 
 #import <Realm/RLMUser.h>
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 /// Observer block for user notifications.
 typedef void(^RLMUserNotificationBlock)(RLMUser *);
@@ -27,21 +27,16 @@ typedef void(^RLMUserNotificationBlock)(RLMUser *);
 /// avoid dangling observers, therefore this must be retained to hold
 /// onto a subscription.
 @interface RLMUserSubscriptionToken : NSObject
-
-/// The underlying value of the subscription token.
-@property (nonatomic, readonly) NSUInteger value;
-
+- (void)unsubscribe;
 @end
 
 @interface RLMUser ()
+@property (nonatomic, strong, nullable) RLMApp *app;
 
 /// Subscribe to notifications for this RLMUser.
 - (RLMUserSubscriptionToken *)subscribe:(RLMUserNotificationBlock)block;
-/// Unsubscribe to notifications for this RLMUser.
-- (void)unsubscribe:(RLMUserSubscriptionToken *)token;
 
 - (void)logOut;
-
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

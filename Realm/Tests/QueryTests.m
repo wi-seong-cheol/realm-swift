@@ -1308,7 +1308,7 @@
         RLMAssertCount(cls, 3U, @"%K BEGINSWITH[cd] 'U'", colName);
 
         RLMAssertCount(cls, 1U, @"%K BEGINSWITH 'ü'", colName);
-        RLMAssertCount(cls, 0U, @"%K BEGINSWITH[c] 'Ü'", colName);
+        RLMAssertCount(cls, 1U, @"%K BEGINSWITH[c] 'Ü'", colName);
         RLMAssertCount(cls, 3U, @"%K BEGINSWITH[d] 'ü'", colName);
         RLMAssertCount(cls, 3U, @"%K BEGINSWITH[cd] 'Ü'", colName);
 
@@ -1378,7 +1378,7 @@
         RLMAssertCount(cls, 2U, @"%K ENDSWITH[cd] 'U'", colName);
 
         RLMAssertCount(cls, 1U, @"%K ENDSWITH 'ü'", colName);
-        RLMAssertCount(cls, 0U, @"%K ENDSWITH[c] 'Ü'", colName);
+        RLMAssertCount(cls, 1U, @"%K ENDSWITH[c] 'Ü'", colName);
         RLMAssertCount(cls, 2U, @"%K ENDSWITH[d] 'ü'", colName);
         RLMAssertCount(cls, 2U, @"%K ENDSWITH[cd] 'Ü'", colName);
 
@@ -1449,7 +1449,7 @@
         RLMAssertCount(cls, 0U, @"%K CONTAINS[cd] ''", colName);
 
         RLMAssertCount(cls, 1U, @"%K CONTAINS 'ü'", colName);
-        RLMAssertCount(cls, 0U, @"%K CONTAINS[c] 'Ü'", colName);
+        RLMAssertCount(cls, 1U, @"%K CONTAINS[c] 'Ü'", colName);
         RLMAssertCount(cls, 3U, @"%K CONTAINS[d] 'ü'", colName);
         RLMAssertCount(cls, 3U, @"%K CONTAINS[cd] 'Ü'", colName);
 
@@ -3739,7 +3739,6 @@ static NSData *data(const char *str) {
             RLMAssertCount(AllDictionariesObject, 0U, @"%K['aKey'] <[c] %@", property, values[0]);
             RLMAssertCount(AllDictionariesObject, 0U, @"%K['aKey'] <[cd] %@", property, values[0]);
         } else {
-
             RLMAssertCount(AllDictionariesObject, 1U, @"%K['aKey'] = %@", property, values[0]);
             RLMAssertCount(AllDictionariesObject, 2U, @"%K['aKey'] != %@", property, values[0]);
             RLMAssertCount(AllDictionariesObject, 1U, @"%K['aKey'] =[c] %@", property, values[0]);
@@ -3806,11 +3805,23 @@ static NSData *data(const char *str) {
 - (void)testDictionarySubscriptThrowsException {
     RLMRealm *realm = [self realm];
     RLMAssertThrowsWithReason(([realm objects:@"ArrayPropertyObject" where:@"array['invalid'] = NULL"]),
-                              @"Invalid keypath 'array[\"invalid\"]': only dictionaries support subscript predicates.");
+                              @"Invalid keypath 'array[\"invalid\"]': only dictionaries and realm `Any` support subscript predicates.");
     RLMAssertThrowsWithReason(([realm objects:@"SetPropertyObject" where:@"set['invalid'] = NULL"]),
-                              @"Invalid keypath 'set[\"invalid\"]': only dictionaries support subscript predicates.");
+                              @"Invalid keypath 'set[\"invalid\"]': only dictionaries and realm `Any` support subscript predicates.");
     RLMAssertThrowsWithReason(([realm objects:@"OwnerObject" where:@"dog['dogName'] = NULL"]),
                               @"Aggregate operations can only be used on key paths that include an collection property");
+    RLMAssertThrows(([realm objects:@"DictionaryPropertyObject" where:@"stringDictionary[%@] = NULL", [RLMObjectId objectId]]),
+                    @"Invalid subscript type 'anyCol[[a-z0-9]+]': Only `Strings` or index are allowed subscripts");
+    RLMAssertThrowsWithReason(([realm objects:@"DictionaryPropertyObject" where:@"stringDictionary['aKey']['bKey'] = NULL"]),
+                              @"Invalid subscript size 'stringDictionary[\"aKey\"][\"bKey\"]': nested dictionaries queries are only allowed in mixed properties.");
+    RLMAssertThrowsWithReason(([realm objects:@"DictionaryPropertyObject" where:@"stringDictionary[0] = NULL"]),
+                              @"Invalid subscript type 'stringDictionary[0]'; only string keys are allowed as subscripts in dictionary queries.");
+}
+
+- (void)testMixedSubscriptsThrowsException {
+    RLMRealm *realm = [self realm];
+    RLMAssertThrows(([realm objects:@"AllTypesObject" where:@"anyCol[%@] = NULL", [RLMObjectId objectId]]),
+                    @"Invalid subscript type 'anyCol[[a-z0-9]+]': Only `Strings` or index are allowed subscripts");
 }
 
 - (void)testCollectionsQueryAllValuesAllKeys {

@@ -18,7 +18,7 @@
 
 #import <Realm/RLMCollection.h>
 
-NS_ASSUME_NONNULL_BEGIN
+RLM_HEADER_AUDIT_BEGIN(nullability, sendability)
 
 @class RLMObject, RLMResults<RLMObjectType>;
 
@@ -258,7 +258,7 @@ NS_ASSUME_NONNULL_BEGIN
  See the `RLMCollectionChange` documentation for information on how the changes
  are reported and an example of updating a `UITableView`.
 
- The error parameter is present only for backwards compatiblity and will always
+ The error parameter is present only for backwards compatibility and will always
  be `nil`.
 
  Notifications are delivered via the standard run loop, and so can't be
@@ -316,7 +316,7 @@ __attribute__((warn_unused_result));
  See the `RLMCollectionChange` documentation for information on how the changes
  are reported and an example of updating a `UITableView`.
 
- The error parameter is present only for backwards compatiblity and will always
+ The error parameter is present only for backwards compatibility and will always
  be `nil`.
 
  Notifications are delivered on the given queue. If the queue is blocked and
@@ -354,7 +354,7 @@ __attribute__((warn_unused_result));
  See the `RLMCollectionChange` documentation for information on how the changes
  are reported and an example of updating a `UITableView`.
 
- The error parameter is present only for backwards compatiblity and will always
+ The error parameter is present only for backwards compatibility and will always
  be `nil`.
 
  Notifications are delivered on the given queue. If the queue is blocked and
@@ -395,7 +395,7 @@ __attribute__((warn_unused_result));
  See the `RLMCollectionChange` documentation for information on how the changes
  are reported and an example of updating a `UITableView`.
 
- The error parameter is present only for backwards compatiblity and will always
+ The error parameter is present only for backwards compatibility and will always
  be `nil`.
 
  Notifications are delivered via the standard run loop, and so can't be
@@ -514,7 +514,7 @@ __attribute__((warn_unused_result));
 
 /**
  `-[RLMSet init]` is not available because `RLMSet`s cannot be created directly.
- ``RLMSet` properties on `RLMObject`s are lazily created when accessed.
+ `RLMSet` properties on `RLMObject`s are lazily created when accessed.
  */
 - (instancetype)init __attribute__((unavailable("RLMSets cannot be created directly")));
 
@@ -532,4 +532,4 @@ __attribute__((warn_unused_result));
 - (instancetype)initWithObjectClassName:(NSString *)objectClassName;
 @end
 
-NS_ASSUME_NONNULL_END
+RLM_HEADER_AUDIT_END(nullability, sendability)

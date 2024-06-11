@@ -18,14 +18,24 @@ DEPENDENCIES = File.open("#{BASE_DIR}/dependencies.list").map { |line|
 }.to_h
 
 MONGODB_VERSION='5.0.6'
-GO_VERSION='1.17.8'
+GO_VERSION='1.21.4'
 NODE_VERSION='16.13.1'
 STITCH_VERSION=DEPENDENCIES["STITCH_VERSION"]
 
 MONGODB_URL="https://fastdl.mongodb.org/osx/mongodb-macos-x86_64-#{MONGODB_VERSION}.tgz"
 TRANSPILER_TARGET='node16-macos'
 SERVER_STITCH_LIB_URL="https://s3.amazonaws.com/stitch-artifacts/stitch-support/stitch-support-macos-debug-4.3.2-721-ge791a2e-patch-5e2a6ad2a4cf473ae2e67b09.tgz"
+STITCH_SUPPORT_URL="https://static.realm.io/downloads/swift/stitch-support.tar.xz"
 MONGO_DIR="#{BUILD_DIR}/mongodb-macos-x86_64-#{MONGODB_VERSION}"
+
+# exit immediately if any subcommand fails
+class Object
+  def `(command)
+    ret = super
+    exit 1 unless $?.success?
+    ret
+  end
+end
 
 def setup_mongod
     if !File.exist?("#{BIN_DIR}/mongo")
@@ -37,7 +47,7 @@ end
 
 def run_mongod
     puts "starting mongod..."
-    puts `mkdir '#{BUILD_DIR}'/db_files`
+    puts `mkdir -p '#{BUILD_DIR}'/db_files`
     puts `#{MONGOD_EXE} --quiet \
         --dbpath '#{BUILD_DIR}'/db_files \
         --port 26000 \
@@ -106,35 +116,38 @@ def setup_stitch
         end
     end
 
+    if !File.exist?("#{BUILD_DIR}/stitch-support.tar.xz")
+        puts 'downloading stitch support'
+        puts `cd #{BUILD_DIR} && curl --silent -O "#{STITCH_SUPPORT_URL}"`
+    end
+
     stitch_dir = stitch_worktree
     if !File.exist?("#{LIB_DIR}/libstitch_support.dylib")
-        puts 'downloading mongodb dylibs'
-        FileUtils.mkdir_p "#{BUILD_DIR}/go/src/github.com/10gen/stitch/etc/dylib"
-        puts `curl -s '#{SERVER_STITCH_LIB_URL}' | tar xvfz - --strip-components=1 -C '#{BUILD_DIR}/go/src/github.com/10gen/stitch/etc/dylib'`
-        FileUtils.copy("#{BUILD_DIR}/go/src/github.com/10gen/stitch/etc/dylib/lib/libstitch_support.dylib", LIB_DIR)
+        FileUtils.mkdir_p "#{stitch_dir}/etc/dylib/include/stitch_support/v1/stitch_support"
+        puts `tar --extract --strip-components=1 -C '#{stitch_dir}/etc/dylib' --file '#{BUILD_DIR}/stitch-support.tar.xz' stitch-support/lib stitch-support/include`
+        FileUtils.copy "#{stitch_dir}/etc/dylib/lib/libstitch_support.dylib", "#{LIB_DIR}"
+        FileUtils.copy "#{stitch_dir}/etc/dylib/include/stitch_support.h", "#{stitch_dir}/etc/dylib/include/stitch_support/v1/stitch_support"
     end
 
     update_doc_filepath = "#{BIN_DIR}/update_doc"
     if !File.exist?(update_doc_filepath)
-        puts "downloading update_doc"
-        puts `cd '#{BIN_DIR}' && curl --silent -O "https://s3.amazonaws.com/stitch-artifacts/stitch-mongo-libs/stitch_mongo_libs_osx_patch_cbcbfd8ebefcca439ff2e4d99b022aedb0d61041_59e2b7a5c9ec4432c400181c_17_10_15_01_19_33/update_doc"`
+        puts `tar --extract --strip-components=2 -C '#{BIN_DIR}' --file '#{BUILD_DIR}/stitch-support.tar.xz' stitch-support/bin/update_doc`
         puts `chmod +x '#{update_doc_filepath}'`
     end
 
     assisted_agg_filepath = "#{BIN_DIR}/assisted_agg"
     if !File.exist?(assisted_agg_filepath)
-        puts "downloading assisted_agg"
-        puts `cd '#{BIN_DIR}' && curl --silent -O "https://s3.amazonaws.com/stitch-artifacts/stitch-mongo-libs/stitch_mongo_libs_osx_patch_b1c679a26ecb975372de41238ea44e4719b8fbf0_5f3d91c10ae6066889184912_20_08_19_20_57_17/assisted_agg"`
+        puts `tar --extract --strip-components=2 -C '#{BIN_DIR}' --file '#{BUILD_DIR}/stitch-support.tar.xz' stitch-support/bin/assisted_agg`
         puts `chmod +x '#{assisted_agg_filepath}'`
     end
 
-    if `which node`.empty? && !Dir.exist?("#{BUILD_DIR}/node-v#{NODE_VERSION}-darwin-x64")
+    if `which node || true`.empty? && !Dir.exist?("#{BUILD_DIR}/node-v#{NODE_VERSION}-darwin-x64")
         puts "downloading node 🚀"
         puts `cd '#{BUILD_DIR}' && curl -O "https://nodejs.org/dist/v#{NODE_VERSION}/node-v#{NODE_VERSION}-darwin-x64.tar.gz" && tar xzf node-v#{NODE_VERSION}-darwin-x64.tar.gz`
         exports << "export PATH=\"#{BUILD_DIR}/node-v#{NODE_VERSION}-darwin-x64/bin/:$PATH\""
     end
 
-    if `which yarn`.empty?
+    if `which yarn || true`.empty?
         `rm -rf "$HOME/.yarn"`
         `export PATH=\"#{BUILD_DIR}/node-v#{NODE_VERSION}-darwin-x64/bin/:$PATH\" && curl -o- -L https://yarnpkg.com/install.sh | bash`
         exports << "export PATH=\"$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH\""
@@ -157,6 +170,7 @@ def setup_stitch
     exports << "export STITCH_PATH=\"#{stitch_dir}\""
     exports << "export PATH=\"$PATH:$STITCH_PATH/etc/transpiler/bin\""
     exports << "export DYLD_LIBRARY_PATH='#{LIB_DIR}'"
+    exports << "export GOPRIVATE=\"github.com/10gen/*\""
 
     puts 'build create_user binary'
 

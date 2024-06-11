@@ -29,34 +29,26 @@
 
 @implementation RLMObjectServerPartitionTests
 
-- (void)roundTripForPartitionValue:(id<RLMBSON>)value testName:(SEL)callerName {
+- (void)roundTripForPartitionValue:(id<RLMBSON>)value {
     NSError *error;
-    NSString *appId = [RealmServer.shared createAppForBSONType:[self partitionBsonType:value] error:&error];
-
+    NSString *appId = [RealmServer.shared
+                       createAppWithPartitionKeyType:[self partitionBsonType:value]
+                       types:@[Person.self] persistent:false error:&error];
     if (error) {
-        XCTFail(@"Could not create app for partition value %@d", value);
-        return;
+        return XCTFail(@"Could not create app for partition value %@d", value);
     }
 
-    NSString *name = NSStringFromSelector(callerName);
-    RLMApp *app = [RLMApp appWithId:appId
-                      configuration:self.defaultAppConfiguration
-                      rootDirectory:self.clientDataRoot];
-    RLMCredentials *credentials = [self basicCredentialsWithName:name register:YES app:app];
-    RLMUser *user = [self logInUserForCredentials:credentials app:app];
+    RLMApp *app = [self appWithId:appId];
+    RLMUser *user = [self createUserForApp:app];
     RLMRealm *realm = [self openRealmForPartitionValue:value user:user];
     CHECK_COUNT(0, Person, realm);
 
-    RLMCredentials *writeCredentials = [self basicCredentialsWithName:[name stringByAppendingString:@"Writer"]
-                                                             register:YES app:app];
-    RLMUser *writeUser = [self logInUserForCredentials:writeCredentials app:app];
+    RLMUser *writeUser = [self createUserForApp:app];
     RLMRealm *writeRealm = [self openRealmForPartitionValue:value user:writeUser];
 
-    auto write = [&]() {
+    auto write = [&] {
         [self addPersonsToRealm:writeRealm
-                        persons:@[[Person john],
-                                  [Person paul],
-                                  [Person ringo]]];
+                        persons:@[[Person john], [Person paul], [Person ringo]]];
         [self waitForUploadsForRealm:writeRealm];
         [self waitForDownloadsForRealm:realm];
     };
@@ -71,23 +63,19 @@
 }
 
 - (void)testRoundTripForObjectIdPartitionValue {
-    [self roundTripForPartitionValue:[[RLMObjectId alloc] initWithString:@"1234567890ab1234567890ab" error:nil]
-                            testName:_cmd];
+    [self roundTripForPartitionValue:[[RLMObjectId alloc] initWithString:@"1234567890ab1234567890ab" error:nil]];
 }
 
 - (void)testRoundTripForUUIDPartitionValue {
-    [self roundTripForPartitionValue:[[NSUUID alloc] initWithUUIDString:@"85d4fbee-6ec6-47df-bfa1-615931903d7e"]
-                            testName:_cmd];
+    [self roundTripForPartitionValue:[[NSUUID alloc] initWithUUIDString:@"85d4fbee-6ec6-47df-bfa1-615931903d7e"]];
 }
 
 - (void)testRoundTripForStringPartitionValue {
-    [self roundTripForPartitionValue:@"1234567890ab1234567890ab"
-                            testName:_cmd];
+    [self roundTripForPartitionValue:@"1234567890ab1234567890ab"];
 }
 
 - (void)testRoundTripForIntPartitionValue {
-    [self roundTripForPartitionValue:@1234567890
-                            testName:_cmd];
+    [self roundTripForPartitionValue:@1234567890];
 }
 
 @end

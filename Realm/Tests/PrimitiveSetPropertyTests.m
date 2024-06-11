@@ -2265,63 +2265,63 @@ static double average(NSArray *values) {
 
 - (void)testNotifications {
     RLMAssertThrowsWithReason([unmanaged.boolObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.intObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.floatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.doubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.stringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.dataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.dateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.decimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.objectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.uuidObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyBoolObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyIntObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyFloatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDoubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyStringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyDecimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyObjectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([unmanaged.anyUUIDObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.intObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.floatObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.doubleObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.stringObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.dataObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.dateObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.decimalObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.objectIdObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj addNotificationBlock:^(__unused id a, __unused id c, __unused id e) { }], 
-                              @"This method may only be called on RLMSet instances retrieved from an RLMRealm");
+                              @"Change notifications are only supported on managed collections.");
 }
 
 - (void)testSetSet {
@@ -3397,25 +3397,25 @@ static double average(NSArray *values) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj minOfProperty:@"self"], 
                               @"minOfProperty: is not supported for uuid? set");
     RLMAssertThrowsWithReason([managed.boolObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for bool set 'AllPrimitiveSets.boolObj'");
+                              @"Operation 'min' not supported for bool set 'AllPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for string set 'AllPrimitiveSets.stringObj'");
+                              @"Operation 'min' not supported for string set 'AllPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([managed.dataObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for data set 'AllPrimitiveSets.dataObj'");
+                              @"Operation 'min' not supported for data set 'AllPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([managed.objectIdObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for object id set 'AllPrimitiveSets.objectIdObj'");
+                              @"Operation 'min' not supported for object id set 'AllPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([managed.uuidObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for uuid set 'AllPrimitiveSets.uuidObj'");
+                              @"Operation 'min' not supported for uuid set 'AllPrimitiveSets.uuidObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
+                              @"Operation 'min' not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
+                              @"Operation 'min' not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([optManaged.dataObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
+                              @"Operation 'min' not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([optManaged.objectIdObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
+                              @"Operation 'min' not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([optManaged.uuidObj minOfProperty:@"self"], 
-                              @"minOfProperty: is not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
+                              @"Operation 'min' not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
 
     uncheckedAssertNil([unmanaged.intObj minOfProperty:@"self"]);
     uncheckedAssertNil([unmanaged.floatObj minOfProperty:@"self"]);
@@ -3501,25 +3501,25 @@ static double average(NSArray *values) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj maxOfProperty:@"self"], 
                               @"maxOfProperty: is not supported for uuid? set");
     RLMAssertThrowsWithReason([managed.boolObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for bool set 'AllPrimitiveSets.boolObj'");
+                              @"Operation 'max' not supported for bool set 'AllPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for string set 'AllPrimitiveSets.stringObj'");
+                              @"Operation 'max' not supported for string set 'AllPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([managed.dataObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for data set 'AllPrimitiveSets.dataObj'");
+                              @"Operation 'max' not supported for data set 'AllPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([managed.objectIdObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for object id set 'AllPrimitiveSets.objectIdObj'");
+                              @"Operation 'max' not supported for object id set 'AllPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([managed.uuidObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for uuid set 'AllPrimitiveSets.uuidObj'");
+                              @"Operation 'max' not supported for uuid set 'AllPrimitiveSets.uuidObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
+                              @"Operation 'max' not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
+                              @"Operation 'max' not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([optManaged.dataObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
+                              @"Operation 'max' not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([optManaged.objectIdObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
+                              @"Operation 'max' not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([optManaged.uuidObj maxOfProperty:@"self"], 
-                              @"maxOfProperty: is not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
+                              @"Operation 'max' not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
 
     uncheckedAssertNil([unmanaged.intObj maxOfProperty:@"self"]);
     uncheckedAssertNil([unmanaged.floatObj maxOfProperty:@"self"]);
@@ -3609,29 +3609,29 @@ static double average(NSArray *values) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj sumOfProperty:@"self"], 
                               @"sumOfProperty: is not supported for uuid? set");
     RLMAssertThrowsWithReason([managed.boolObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for bool set 'AllPrimitiveSets.boolObj'");
+                              @"Operation 'sum' not supported for bool set 'AllPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for string set 'AllPrimitiveSets.stringObj'");
+                              @"Operation 'sum' not supported for string set 'AllPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([managed.dataObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for data set 'AllPrimitiveSets.dataObj'");
+                              @"Operation 'sum' not supported for data set 'AllPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([managed.dateObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for date set 'AllPrimitiveSets.dateObj'");
+                              @"Operation 'sum' not supported for date set 'AllPrimitiveSets.dateObj'");
     RLMAssertThrowsWithReason([managed.objectIdObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for object id set 'AllPrimitiveSets.objectIdObj'");
+                              @"Operation 'sum' not supported for object id set 'AllPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([managed.uuidObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for uuid set 'AllPrimitiveSets.uuidObj'");
+                              @"Operation 'sum' not supported for uuid set 'AllPrimitiveSets.uuidObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
+                              @"Operation 'sum' not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
+                              @"Operation 'sum' not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([optManaged.dataObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
+                              @"Operation 'sum' not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([optManaged.dateObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for date? set 'AllOptionalPrimitiveSets.dateObj'");
+                              @"Operation 'sum' not supported for date? set 'AllOptionalPrimitiveSets.dateObj'");
     RLMAssertThrowsWithReason([optManaged.objectIdObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
+                              @"Operation 'sum' not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([optManaged.uuidObj sumOfProperty:@"self"], 
-                              @"sumOfProperty: is not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
+                              @"Operation 'sum' not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
 
     uncheckedAssertEqualObjects([unmanaged.intObj sumOfProperty:@"self"], @0);
     uncheckedAssertEqualObjects([unmanaged.floatObj sumOfProperty:@"self"], @0);
@@ -3710,29 +3710,29 @@ static double average(NSArray *values) {
     RLMAssertThrowsWithReason([optUnmanaged.uuidObj averageOfProperty:@"self"], 
                               @"averageOfProperty: is not supported for uuid? set");
     RLMAssertThrowsWithReason([managed.boolObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for bool set 'AllPrimitiveSets.boolObj'");
+                              @"Operation 'average' not supported for bool set 'AllPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([managed.stringObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for string set 'AllPrimitiveSets.stringObj'");
+                              @"Operation 'average' not supported for string set 'AllPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([managed.dataObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for data set 'AllPrimitiveSets.dataObj'");
+                              @"Operation 'average' not supported for data set 'AllPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([managed.dateObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for date set 'AllPrimitiveSets.dateObj'");
+                              @"Operation 'average' not supported for date set 'AllPrimitiveSets.dateObj'");
     RLMAssertThrowsWithReason([managed.objectIdObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for object id set 'AllPrimitiveSets.objectIdObj'");
+                              @"Operation 'average' not supported for object id set 'AllPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([managed.uuidObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for uuid set 'AllPrimitiveSets.uuidObj'");
+                              @"Operation 'average' not supported for uuid set 'AllPrimitiveSets.uuidObj'");
     RLMAssertThrowsWithReason([optManaged.boolObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
+                              @"Operation 'average' not supported for bool? set 'AllOptionalPrimitiveSets.boolObj'");
     RLMAssertThrowsWithReason([optManaged.stringObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
+                              @"Operation 'average' not supported for string? set 'AllOptionalPrimitiveSets.stringObj'");
     RLMAssertThrowsWithReason([optManaged.dataObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
+                              @"Operation 'average' not supported for data? set 'AllOptionalPrimitiveSets.dataObj'");
     RLMAssertThrowsWithReason([optManaged.dateObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for date? set 'AllOptionalPrimitiveSets.dateObj'");
+                              @"Operation 'average' not supported for date? set 'AllOptionalPrimitiveSets.dateObj'");
     RLMAssertThrowsWithReason([optManaged.objectIdObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
+                              @"Operation 'average' not supported for object id? set 'AllOptionalPrimitiveSets.objectIdObj'");
     RLMAssertThrowsWithReason([optManaged.uuidObj averageOfProperty:@"self"], 
-                              @"averageOfProperty: is not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
+                              @"Operation 'average' not supported for uuid? set 'AllOptionalPrimitiveSets.uuidObj'");
 
     uncheckedAssertNil([unmanaged.intObj averageOfProperty:@"self"]);
     uncheckedAssertNil([unmanaged.floatObj averageOfProperty:@"self"]);
@@ -8236,21 +8236,16 @@ static double average(NSArray *values) {
         RLMAssertCount(LinkToAllOptionalPrimitiveSets, count, query, NSNull.null);
     };
 
-    // Core's implementation of case-insensitive comparisons only works for
-    // unaccented a-z, so the diacritic-sensitive, case-insensitive queries
-    // match half as many as they should. Many of the below tests will start
-    // failing if this is fixed.
-
     testNull(@"==", 0);
     test(@"==", @"", 4);
     test(@"==", @"a", 1);
     test(@"==", @"á", 1);
     test(@"==[c]", @"a", 2);
-    test(@"==[c]", @"á", 1);
+    test(@"==[c]", @"á", 2);
     test(@"==", @"A", 1);
     test(@"==", @"Á", 1);
     test(@"==[c]", @"A", 2);
-    test(@"==[c]", @"Á", 1);
+    test(@"==[c]", @"Á", 2);
     test(@"==[d]", @"a", 2);
     test(@"==[d]", @"á", 2);
     test(@"==[cd]", @"a", 4);
@@ -8265,11 +8260,11 @@ static double average(NSArray *values) {
     test(@"!=", @"a", 159);
     test(@"!=", @"á", 159);
     test(@"!=[c]", @"a", 158);
-    test(@"!=[c]", @"á", 159);
+    test(@"!=[c]", @"á", 158);
     test(@"!=", @"A", 159);
     test(@"!=", @"Á", 159);
     test(@"!=[c]", @"A", 158);
-    test(@"!=[c]", @"Á", 159);
+    test(@"!=[c]", @"Á", 158);
     test(@"!=[d]", @"a", 158);
     test(@"!=[d]", @"á", 158);
     test(@"!=[cd]", @"a", 156);
@@ -8286,11 +8281,11 @@ static double average(NSArray *values) {
     test(@"CONTAINS", @"a", 25);
     test(@"CONTAINS", @"á", 25);
     test(@"CONTAINS[c]", @"a", 50);
-    test(@"CONTAINS[c]", @"á", 25);
+    test(@"CONTAINS[c]", @"á", 50);
     test(@"CONTAINS", @"A", 25);
     test(@"CONTAINS", @"Á", 25);
     test(@"CONTAINS[c]", @"A", 50);
-    test(@"CONTAINS[c]", @"Á", 25);
+    test(@"CONTAINS[c]", @"Á", 50);
     test(@"CONTAINS[d]", @"a", 50);
     test(@"CONTAINS[d]", @"á", 50);
     test(@"CONTAINS[cd]", @"a", 100);
@@ -8303,11 +8298,11 @@ static double average(NSArray *values) {
     test(@"BEGINSWITH", @"a", 13);
     test(@"BEGINSWITH", @"á", 13);
     test(@"BEGINSWITH[c]", @"a", 26);
-    test(@"BEGINSWITH[c]", @"á", 13);
+    test(@"BEGINSWITH[c]", @"á", 26);
     test(@"BEGINSWITH", @"A", 13);
     test(@"BEGINSWITH", @"Á", 13);
     test(@"BEGINSWITH[c]", @"A", 26);
-    test(@"BEGINSWITH[c]", @"Á", 13);
+    test(@"BEGINSWITH[c]", @"Á", 26);
     test(@"BEGINSWITH[d]", @"a", 26);
     test(@"BEGINSWITH[d]", @"á", 26);
     test(@"BEGINSWITH[cd]", @"a", 52);
@@ -8320,11 +8315,11 @@ static double average(NSArray *values) {
     test(@"ENDSWITH", @"a", 13);
     test(@"ENDSWITH", @"á", 13);
     test(@"ENDSWITH[c]", @"a", 26);
-    test(@"ENDSWITH[c]", @"á", 13);
+    test(@"ENDSWITH[c]", @"á", 26);
     test(@"ENDSWITH", @"A", 13);
     test(@"ENDSWITH", @"Á", 13);
     test(@"ENDSWITH[c]", @"A", 26);
-    test(@"ENDSWITH[c]", @"Á", 13);
+    test(@"ENDSWITH[c]", @"Á", 26);
     test(@"ENDSWITH[d]", @"a", 26);
     test(@"ENDSWITH[d]", @"á", 26);
     test(@"ENDSWITH[cd]", @"a", 52);

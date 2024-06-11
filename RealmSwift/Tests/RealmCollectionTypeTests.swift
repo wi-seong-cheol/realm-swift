@@ -21,6 +21,10 @@
 import XCTest
 import RealmSwift
 
+#if canImport(RealmSwiftTestSupport)
+import RealmSwiftTestSupport
+#endif
+
 class CTTAggregateObject: Object {
     @Persisted var intCol = 0
     @Persisted var int8Col = 0
@@ -289,7 +293,7 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
         let actual = collection.value(forKey: "stringCol") as! [String]?
         XCTAssertEqual(expected as! [String], actual!)
 
-        assertEqual(collection.map { $0 }, collection.value(forKey: "self") as! [CTTNullableStringObjectWithLink])
+        assertEqual(Array(collection), collection.value(forKey: "self") as! [CTTNullableStringObjectWithLink])
     }
 
     func testSetValueForKey() {
@@ -651,6 +655,149 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
         token2.invalidate()
     }
 
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    private actor TestActor {
+        private var gotInitial = false
+        private var gotChange = false
+        var expectation: XCTestExpectation!
+
+        func expect(_ description: String) {
+            expectation = XCTestExpectation(description: description)
+        }
+
+        func check(_ changes: RealmCollectionChange<Collection>) {
+            switch changes {
+            case .initial(let collection):
+                XCTAssertEqual(collection.count, 2)
+                XCTAssertFalse(gotInitial)
+                gotInitial = true
+
+            case let .update(collection, deletions, _, _):
+                XCTAssertEqual(collection.count, 0)
+                XCTAssertEqual(deletions, [0, 1])
+                XCTAssertFalse(gotChange)
+                gotChange = true
+
+            case .error(let error):
+                XCTFail("Unexpected error: \(error)")
+            }
+            expectation.fulfill()
+        }
+
+        func checkFiltered(_ changes: RealmCollectionChange<Collection>) {
+            switch changes {
+            case .initial(let collection):
+                XCTAssertEqual(collection.count, 2)
+                XCTAssertFalse(gotInitial)
+                gotInitial = true
+
+            case let .update(_, _, _, modifications):
+                XCTAssertEqual(modifications, [0])
+                XCTAssertFalse(gotChange)
+                gotChange = true
+
+            case .error(let error):
+                XCTFail("Unexpected error: \(error)")
+            }
+            expectation.fulfill()
+        }
+
+        func observe(_ tsr: ThreadSafeReference<Collection>) async throws -> NotificationToken {
+            let realm = try await Realm(configuration: Config.config, actor: self)
+            return try XCTUnwrap(realm.resolve(tsr)).observe(check)
+        }
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testObserveOnActor() async throws {
+        let actor = TestActor()
+        await actor.expect("initial notification")
+        let token = await collection.observe(on: actor) { actor, changes in
+            actor.check(changes)
+        }
+        await fulfillment(of: [actor.expectation])
+
+        await actor.expect("change notification")
+        let realm = self.realm()
+        try realm.write {
+            realm.delete(collection)
+        }
+        await fulfillment(of: [actor.expectation])
+        token.invalidate()
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testObserveInsideActor() async throws {
+        let actor = TestActor()
+        await actor.expect("initial notification")
+        let token = try await actor.observe(ThreadSafeReference(to: collection))
+        await fulfillment(of: [actor.expectation])
+
+        await actor.expect("change notification")
+        let realm = self.realm()
+        try realm.write {
+            realm.delete(collection)
+        }
+        await fulfillment(of: [actor.expectation])
+        token.invalidate()
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testCancelTaskForObservationInit() async throws {
+        let task = Locked<Task<Void, Never>?>(wrappedValue: nil)
+        task.wrappedValue = Task { @MainActor in
+            task.wrappedValue!.cancel()
+            let token = await collection.observe(on: CustomGlobalActor.shared) { _, _ in
+                XCTFail("should not have been registered")
+            }
+            XCTAssertFalse(token.invalidate())
+        }
+        await _ = task.wrappedValue!.value
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testObserveOnActorWithStringKeyPath() async throws {
+        let actor = TestActor()
+        await actor.expect("initial notification")
+        let token = await collection.observe(keyPaths: ["stringCol"], on: actor) { actor, changes in
+            actor.checkFiltered(changes)
+        }
+        await fulfillment(of: [actor.expectation])
+
+        await actor.expect("change notification")
+        let realm = self.realm()
+        try realm.write {
+            collection[0].stringCol = "a"
+            collection[1].linkCol = nil
+        }
+        await fulfillment(of: [actor.expectation])
+        token.invalidate()
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testObserveOnActorWithKeyPath() async throws {
+        let actor = TestActor()
+        await actor.expect("initial notification")
+        let token = await collection.observe(keyPaths: [\.stringCol], on: actor) { actor, changes in
+            actor.checkFiltered(changes)
+        }
+        await fulfillment(of: [actor.expectation])
+
+        await actor.expect("change notification")
+        let realm = self.realm()
+        try realm.write {
+            collection[0].stringCol = "a"
+            collection[1].linkCol = nil
+        }
+        await fulfillment(of: [actor.expectation])
+        token.invalidate()
+    }
+
     func testObserveKeyPath() {
         var ex = expectation(description: "initial notification")
         let token0 = collection.observe(keyPaths: ["stringCol"]) { (changes: RealmCollectionChange) in
@@ -795,7 +942,7 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
 
     func testObservePartialKeyPath() {
         var ex = expectation(description: "initial notification")
-        let token0 = collection.observe(keyPaths: [\CTTNullableStringObjectWithLink.stringCol]) { (changes: RealmCollectionChange) in
+        let token0 = collection.observe(keyPaths: [\.stringCol]) { (changes: RealmCollectionChange) in
             switch changes {
             case .initial(let collection):
                 XCTAssertEqual(collection.count, 2)
@@ -825,7 +972,7 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
 
     func testObservePartialKeyPathNoChange() {
         let ex = expectation(description: "initial notification")
-        let token0 = collection.observe(keyPaths: [\CTTNullableStringObjectWithLink.stringCol]) { (changes: RealmCollectionChange) in
+        let token0 = collection.observe(keyPaths: [\.stringCol]) { (changes: RealmCollectionChange) in
             switch changes {
             case .initial(let collection):
                 XCTAssertEqual(collection.count, 2)
@@ -846,7 +993,7 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
 
     func testObservePartialKeyPathWithLink() {
         var ex = expectation(description: "initial notification")
-        let token = collection.observe(keyPaths: [\CTTNullableStringObjectWithLink.linkCol?.id]) { (changes: RealmCollectionChange) in
+        let token = collection.observe(keyPaths: [\.linkCol?.id]) { (changes: RealmCollectionChange) in
             switch changes {
             case .initial(let collection):
                 XCTAssertEqual(collection.count, 2)
@@ -879,7 +1026,7 @@ class RealmCollectionTests<Collection: RealmCollection, AggregateCollection: Rea
 
     func testObservePartialKeyPathWithLinkNoChangeList() {
         let ex = expectation(description: "initial notification")
-        let token = collection.observe(keyPaths: [\CTTNullableStringObjectWithLink.linkCol]) { (changes: RealmCollectionChange) in
+        let token = collection.observe(keyPaths: [\.linkCol]) { (changes: RealmCollectionChange) in
             switch changes {
             case .initial(let collection):
                 XCTAssertEqual(collection.count, 2)
@@ -1316,7 +1463,7 @@ class ResultsWithCustomInitializerTests: TestCase {
         let expected = Array(collection.map { $0.stringCol })
         let actual = collection.value(forKey: "stringCol") as! [String]?
         XCTAssertEqual(expected, actual!)
-        assertEqual(collection.map { $0 }, collection.value(forKey: "self") as! [SwiftCustomInitializerObject])
+        assertEqual(Array(collection), collection.value(forKey: "self") as! [SwiftCustomInitializerObject])
     }
 }
 
@@ -1597,6 +1744,17 @@ class ListUnmanagedRealmCollectionTests: ListRealmCollectionTests {
         assertThrows(collection.observe { _ in })
     }
 
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testCancelTaskForObservationInit() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActor() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveInsideActor() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActorWithStringKeyPath() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActorWithKeyPath() async throws {}
+
     override func testObserveKeyPath() {
         assertThrows(collection.observe { _ in })
     }
@@ -1837,6 +1995,17 @@ class MutableSetUnmanagedRealmCollectionTests: MutableSetRealmCollectionTests {
     override func testObserve() {
         assertThrows(collection.observe { _ in })
     }
+
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testCancelTaskForObservationInit() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActor() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveInsideActor() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActorWithStringKeyPath() async throws {}
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    override func testObserveOnActorWithKeyPath() async throws {}
 
     override func testObserveOnQueue() {
         assertThrows(collection.observe(on: DispatchQueue(label: "bg")) { _ in })

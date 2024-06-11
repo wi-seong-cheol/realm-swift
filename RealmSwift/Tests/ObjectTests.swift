@@ -20,6 +20,11 @@ import XCTest
 import Realm
 import RealmSwift
 import Foundation
+import os.lock
+
+#if canImport(RealmSwiftTestSupport)
+import RealmSwiftTestSupport
+#endif
 
 private var dynamicDefaultSeed = 0
 private func nextDynamicDefaultSeed() -> Int {
@@ -51,7 +56,7 @@ class ObjectTests: TestCase {
         let realm = try! Realm()
         var persisted: SwiftStringObject!
         try! realm.write {
-            persisted = realm.create(SwiftStringObject.self, value: [:])
+            persisted = realm.create(SwiftStringObject.self)
             XCTAssertNotNil(persisted.realm)
             XCTAssertEqual(realm, persisted.realm!)
         }
@@ -181,12 +186,12 @@ class ObjectTests: TestCase {
 
         let intObj = SwiftPrimaryIntObject()
         intObj.intCol = 1
-        intObj.intCol = 0; // can change primary key unattached
+        intObj.intCol = 0 // can change primary key unattached
         XCTAssertEqual(0, intObj.intCol)
 
         let optionalIntObj = SwiftPrimaryOptionalIntObject()
         optionalIntObj.intCol.value = 1
-        optionalIntObj.intCol.value = 0; // can change primary key unattached
+        optionalIntObj.intCol.value = 0 // can change primary key unattached
         XCTAssertEqual(0, optionalIntObj.intCol.value)
 
         let stringObj = SwiftPrimaryStringObject()
@@ -310,7 +315,7 @@ class ObjectTests: TestCase {
             XCTAssertNil(object.value(forKey: "anyCol"))
 
             let expected = object.value(forKey: "binaryCol") as! Data
-            let actual = "a".data(using: String.Encoding.utf8)!
+            let actual = Data("a".utf8)
             XCTAssertEqual(expected, actual)
 
             XCTAssertEqual(object.value(forKey: "dateCol") as! Date?, Date(timeIntervalSince1970: 1))
@@ -322,7 +327,7 @@ class ObjectTests: TestCase {
         test(SwiftObject())
         let realm = try! Realm()
         try! realm.write {
-            test(realm.create(SwiftObject.self, value: [:]))
+            test(realm.create(SwiftObject.self))
             let addedObj = SwiftObject()
             realm.add(addedObj)
             test(addedObj)
@@ -350,7 +355,7 @@ class ObjectTests: TestCase {
         test(SwiftOptionalObject())
         let realm = try! Realm()
         try! realm.write {
-            test(realm.create(SwiftOptionalObject.self, value: [:]))
+            test(realm.create(SwiftOptionalObject.self))
             let addedObj = SwiftOptionalObject()
             realm.add(addedObj)
             test(addedObj)
@@ -394,7 +399,7 @@ class ObjectTests: TestCase {
         test(SwiftListObject())
         let realm = try! Realm()
         try! realm.write {
-            test(realm.create(SwiftListObject.self, value: [:]))
+            test(realm.create(SwiftListObject.self))
             let addedObj = SwiftListObject()
             realm.add(addedObj)
             test(addedObj)
@@ -436,7 +441,7 @@ class ObjectTests: TestCase {
         test(SwiftMutableSetObject())
         let realm = try! Realm()
         try! realm.write {
-            test(realm.create(SwiftMutableSetObject.self, value: [:]))
+            test(realm.create(SwiftMutableSetObject.self))
             let addedObj = SwiftMutableSetObject()
             realm.add(addedObj)
             test(addedObj)
@@ -521,9 +526,9 @@ class ObjectTests: TestCase {
         setter(object, "z", "stringCol")
         XCTAssertEqual(getter(object, "stringCol") as! String?, "z")
 
-        setter(object, "z".data(using: String.Encoding.utf8)! as Data, "binaryCol")
+        setter(object, Data("z".utf8), "binaryCol")
         let gotData = getter(object, "binaryCol") as! Data
-        XCTAssertTrue(gotData == "z".data(using: String.Encoding.utf8)!)
+        XCTAssertTrue(gotData == Data("z".utf8))
 
         setter(object, Date(timeIntervalSince1970: 333), "dateCol")
         XCTAssertEqual(getter(object, "dateCol") as! Date?, Date(timeIntervalSince1970: 333))
@@ -564,6 +569,13 @@ class ObjectTests: TestCase {
         setter(object, [boolObject], "arrayCol")
         setter(object, NSNull(), "arrayCol")
         XCTAssertEqual((getter(object, "arrayCol") as! List<SwiftBoolObject>).count, 0)
+
+        if object.realm != nil {
+            let listRes = object.realm!.objects(SwiftBoolObject.self).filter("boolCol == true")
+            setter(object, listRes, "arrayCol")
+            XCTAssertEqual((getter(object, "arrayCol") as! List<SwiftBoolObject>).count, listRes.count)
+            assertEqual((getter(object, "arrayCol") as! List<SwiftBoolObject>).first!, boolObject)
+        }
 
         let set = MutableSet<SwiftBoolObject>()
         set.insert(boolObject)
@@ -617,9 +629,9 @@ class ObjectTests: TestCase {
         setter(object, "z", "stringCol")
         XCTAssertEqual((getter(object, "stringCol") as! String), "z")
 
-        setter(object, "z".data(using: String.Encoding.utf8)! as Data, "binaryCol")
+        setter(object, Data("z".utf8), "binaryCol")
         let gotData = getter(object, "binaryCol") as! Data
-        XCTAssertTrue(gotData == "z".data(using: String.Encoding.utf8)!)
+        XCTAssertTrue(gotData == Data("z".utf8))
 
         setter(object, Date(timeIntervalSince1970: 333), "dateCol")
         XCTAssertEqual((getter(object, "dateCol") as! Date), Date(timeIntervalSince1970: 333))
@@ -674,25 +686,25 @@ class ObjectTests: TestCase {
     }
 
     // Yields a read-write migration `SwiftObject` to the given block
-    private func withMigrationObject(block: @escaping ((MigrationObject, Migration) -> Void)) {
+    private func withMigrationObject(block: @escaping @Sendable (MigrationObject, Migration) -> Void) {
         autoreleasepool {
             let realm = self.realmWithTestPath()
             try! realm.write {
                 _ = realm.create(SwiftObject.self)
             }
         }
+        let enumerated = Locked(false)
         autoreleasepool {
-            var enumerated = false
             let configuration = Realm.Configuration(schemaVersion: 1, migrationBlock: { migration, _ in
                 migration.enumerateObjects(ofType: SwiftObject.className()) { _, newObject in
                     if let newObject = newObject {
                         block(newObject, migration)
-                        enumerated = true
+                        enumerated.value = true
                     }
                 }
             })
             self.realmWithTestPath(configuration: configuration)
-            XCTAssert(enumerated)
+            XCTAssert(enumerated.value)
         }
     }
 
@@ -712,7 +724,7 @@ class ObjectTests: TestCase {
 
         setAndTestAllTypes(setter, getter: getter, object: SwiftObject())
         try! Realm().write {
-            let persistedObject = try! Realm().create(SwiftObject.self, value: [:])
+            let persistedObject = try! Realm().create(SwiftObject.self)
             self.setAndTestAllTypes(setter, getter: getter, object: persistedObject)
         }
     }
@@ -732,7 +744,7 @@ class ObjectTests: TestCase {
 
         setAndTestAllTypes(setter, getter: getter, object: SwiftObject())
         try! Realm().write {
-            let persistedObject = try! Realm().create(SwiftObject.self, value: [:])
+            let persistedObject = try! Realm().create(SwiftObject.self)
             self.setAndTestAllTypes(setter, getter: getter, object: persistedObject)
         }
     }
@@ -793,7 +805,7 @@ class ObjectTests: TestCase {
         let realm = try! Realm()
         var object: SwiftObjectiveCTypesObject!
         let now = NSDate()
-        let data = "fizzbuzz".data(using: .utf8)! as Data as NSData
+        let data = Data("fizzbuzz".utf8) as NSData
         try! realm.write {
             object = SwiftObjectiveCTypesObject()
             realm.add(object)
@@ -813,12 +825,12 @@ class ObjectTests: TestCase {
         assertThrows(SwiftIntObject().observe(keyPaths: ["intCol"]) { _ in }, reason: "managed")
     }
 
-    func testDeleteObservedObject() {
-        let realm = try! Realm()
+    func testDeleteObservedObject() throws {
+        let realm = try Realm()
         realm.beginWrite()
         let object0 = realm.create(SwiftIntObject.self, value: [0])
         let object1 = realm.create(SwiftIntObject.self, value: [0])
-        try! realm.commitWrite()
+        try realm.commitWrite()
 
         let exp0 = expectation(description: "Delete observed object")
         let token0 = object0.observe { change in
@@ -841,20 +853,26 @@ class ObjectTests: TestCase {
         realm.beginWrite()
         realm.delete(object0)
         realm.delete(object1)
-        try! realm.commitWrite()
+        try realm.commitWrite()
 
         waitForExpectations(timeout: 1)
         token0.invalidate()
         token1.invalidate()
     }
 
-    func testObserveInvalidKeyPath () {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = realm.create(SwiftObject.self)
-        try! realm.commitWrite()
-        assertThrows(object.observe(keyPaths: ["notAProperty"], { _ in }), reason: "Property 'notAProperty' not found in object of type 'SwiftObject'")
-        assertThrows(object.observe(keyPaths: ["arrayCol.alsoNotAProperty"], { _ in }), reason: "Property 'alsoNotAProperty' not found in object of type 'SwiftBoolObject'")
+    func createObject(_ value: Int = 0) throws -> SwiftObject {
+        let realm = try Realm()
+        return try realm.write {
+            realm.create(SwiftObject.self, value: ["intCol": value])
+        }
+    }
+
+    func testObserveInvalidKeyPath () throws {
+        let object = try createObject()
+        assertThrows(object.observe(keyPaths: ["notAProperty"], { _ in }),
+                     reason: "property 'notAProperty' not found in object of type 'SwiftObject'")
+        assertThrows(object.observe(keyPaths: ["arrayCol.alsoNotAProperty"], { _ in }),
+                     reason: "property 'alsoNotAProperty' not found in object of type 'SwiftBoolObject'")
     }
 
     func checkChange<T: Equatable, U: Equatable>(_ name: String, _ old: T?, _ new: U?, _ change: ObjectChange<ObjectBase>) {
@@ -879,14 +897,10 @@ class ObjectTests: TestCase {
         }
     }
 
-    func testModifyObservedObjectLocally() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = realm.create(SwiftIntObject.self, value: [1])
-        try! realm.commitWrite()
-
+    func testModifyObservedObjectLocally() throws {
+        let object = try createObject()
         let token = object.observe(expectChange("intCol", Int?.none, 2))
-        try! realm.write {
+        try object.realm!.write {
             object.intCol = 2
         }
 
@@ -894,73 +908,34 @@ class ObjectTests: TestCase {
         token.invalidate()
     }
 
-    // !!!: Fails, but the feature will not support this behavior at first.
-    // See version below
-//    func testModifyObservedKeyPathLocally() {
-//        let realm = try! Realm()
-//        realm.beginWrite()
-//        let object = realm.create(SwiftObject.self)
-//        try! realm.commitWrite()
-//
-//        // Expect notification for "intCol" keyPath when "intCol" is modified
-//        let token1 = object.observe(keyPaths: ["intCol"], expectChange("intCol", Int?.none, 2))
-//
-//        // Expect no notification for "boolCol" keypath when "intCol" is modified
-//        let token0 = object.observe(keyPaths: ["boolCol"], { change in
-//            XCTFail("expected no change, got \(change)")
-//        })
-//
-//        try! realm.write {
-//            object.intCol = 2
-//        }
-//
-//        waitForExpectations(timeout: 2)
-//        token0.invalidate()
-//        token1.invalidate()
-//    }
-
-    func testModifyObservedKeyPathLocally() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
-
-        // Expect notification for "intCol" keyPath when "intCol" is modified
+    func testModifyObservedKeyPathLocally() throws {
+        let object = try createObject()
         let token = object.observe(keyPaths: ["intCol"], expectChange("intCol", Int?.none, 2))
-        try! realm.write {
+        try object.realm!.write {
             object.intCol = 2
         }
         waitForExpectations(timeout: 0.1)
         token.invalidate()
     }
 
-    func testModifyUnobservedKeyPathLocally() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
+    func testModifyUnobservedKeyPathLocally() throws {
+        let object = try createObject()
 
         // Expect no notification for "boolCol" keypath when "intCol" is modified
         let ex = expectation(description: "no change")
         ex.isInverted = true
-        let token = object.observe(keyPaths: ["boolCol"], { _ in
+        let token = object.observe(keyPaths: ["boolCol"]) { _ in
             ex.fulfill()
-        })
-        try! realm.write {
+        }
+        try object.realm!.write {
             object.intCol = 3
         }
         waitForExpectations(timeout: 0.1, handler: nil)
         token.invalidate()
     }
 
-    func testModifyMultipleObservedPartialKeyPathLocally() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
+    func testModifyMultipleObservedPartialKeyPathLocally() throws {
+        let object = try createObject()
 
         // Expect notification for "intCol" keyPath when "intCol" is modified
         var ex = expectation(description: "expect notification")
@@ -971,7 +946,7 @@ class ObjectTests: TestCase {
                 ex.fulfill()
             }
         }
-        try! realm.write {
+        try object.realm!.write {
             object.intCol = 2
         }
         waitForExpectations(timeout: 0.1)
@@ -986,58 +961,47 @@ class ObjectTests: TestCase {
                 ex.fulfill()
             }
         }
-        try! realm.write {
+        try object.realm!.write {
             object.stringCol = "new string"
         }
         waitForExpectations(timeout: 0.1)
         token.invalidate()
     }
 
-    func testModifyUnobservedPartialKeyPathLocally() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
+    func testModifyUnobservedPartialKeyPathLocally() throws {
+        let object = try createObject()
 
         // Expect no notification for "boolCol" keypath when "intCol" is modified
         let ex = expectation(description: "no change")
         ex.isInverted = true
-        let token = object.observe(keyPaths: [\SwiftObject.boolCol, \SwiftObject.stringCol], { _ in
+        let token = object.observe(keyPaths: [\SwiftObject.boolCol, \SwiftObject.stringCol]) { _ in
             ex.fulfill()
-        })
-        try! realm.write {
+        }
+        try object.realm!.write {
             object.intCol = 3
         }
         waitForExpectations(timeout: 0.1, handler: nil)
         token.invalidate()
     }
 
-    func testModifyObservedObjectRemotely() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = realm.create(SwiftIntObject.self, value: [1])
-        try! realm.commitWrite()
+    func testModifyObservedObjectRemotely() throws {
+        let object = try createObject(1)
 
         let token = object.observe(expectChange("intCol", 1, 2))
         dispatchSyncNewThread {
             let realm = try! Realm()
             try! realm.write {
-                realm.objects(SwiftIntObject.self).first!.intCol = 2
+                realm.objects(SwiftObject.self).first!.intCol = 2
             }
         }
 
-        realm.refresh()
+        object.realm!.refresh()
         waitForExpectations(timeout: 0)
         token.invalidate()
     }
 
-    func testModifyObservedKeyPathRemotely() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
+    func testModifyObservedKeyPathRemotely() throws {
+        let object = try createObject(123)
 
         // Expect notification for "intCol" keyPath when "intCol" is modified
         let token = object.observe(keyPaths: ["intCol"], expectChange("intCol", 123, 2))
@@ -1047,24 +1011,20 @@ class ObjectTests: TestCase {
                 realm.objects(SwiftObject.self).first!.intCol = 2
             }
         }
-        realm.refresh()
+        object.realm!.refresh()
         waitForExpectations(timeout: 0.1)
         token.invalidate()
     }
 
-    func testModifyUnobservedKeyPathRemotely() {
-        let realm = try! Realm()
-        realm.beginWrite()
-        let object = SwiftObject()
-        realm.add(object)
-        try! realm.commitWrite()
+    func testModifyUnobservedKeyPathRemotely() throws {
+        let object = try createObject()
 
         // Expect no notification for "boolCol" keypath when "intCol" is modified
         let ex = expectation(description: "no change")
         ex.isInverted = true
-        let token = object.observe(keyPaths: ["boolCol"], { _ in
+        let token = object.observe(keyPaths: ["boolCol"]) { _ in
             ex.fulfill()
-        })
+        }
 
         dispatchSyncNewThread {
             let realm = try! Realm()
@@ -1073,7 +1033,7 @@ class ObjectTests: TestCase {
                 first.intCol += 1
             }
         }
-        realm.refresh()
+        object.realm!.refresh()
         waitForExpectations(timeout: 0.1, handler: nil)
         token.invalidate()
     }
@@ -1081,7 +1041,7 @@ class ObjectTests: TestCase {
     func testListPropertyNotifications() {
         let realm = try! Realm()
         realm.beginWrite()
-        let object = realm.create(SwiftRecursiveObject.self, value: [[]])
+        let object = realm.create(SwiftRecursiveObject.self)
         try! realm.commitWrite()
 
         let token = object.observe(expectChange("objects", Int?.none, Int?.none))
@@ -1303,7 +1263,6 @@ class ObjectTests: TestCase {
 
         // Expect no notification for "owners" when "owner.name" is changed
         let ex = expectation(description: "no change notification")
-        ex.isInverted = true
         let token = dog.observe(keyPaths: ["owners"], { _ in
             ex.fulfill()
         })
@@ -1374,7 +1333,7 @@ class ObjectTests: TestCase {
     func testMutableSetPropertyNotifications() {
         let realm = try! Realm()
         realm.beginWrite()
-        let object = realm.create(SwiftRecursiveObject.self, value: [[]])
+        let object = realm.create(SwiftRecursiveObject.self)
         try! realm.commitWrite()
 
         let token = object.observe(expectChange("objectSet", Int?.none, Int?.none))
@@ -1571,6 +1530,188 @@ class ObjectTests: TestCase {
         queue.sync { }
     }
 
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func expectChange<T: Object>(_ obj: T, _ ex: XCTestExpectation, newValue: Int)
+    -> @Sendable (isolated CustomGlobalActor, ObjectChange<T>) -> Void {
+        let unchecked = Unchecked(obj)
+        return { _, change in
+            XCTAssertFalse(Thread.isMainThread)
+            guard case let .change(object, props) = change else {
+                return XCTFail("Expected change event but got \(change))")
+            }
+            XCTAssertNotIdentical(unchecked.value, object)
+            XCTAssertEqual(RLMObjectBaseGetCombineId(unchecked.value), RLMObjectBaseGetCombineId(object))
+            XCTAssertEqual(props.count, 1)
+            XCTAssertEqual(props[0].name, "intCol")
+            XCTAssertEqual(props[0].oldValue! as! Int, 0)
+            XCTAssertEqual(props[0].newValue! as! Int, newValue)
+            ex.fulfill()
+        }
+    }
+
+    @MainActor
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func testObserveOnActor() async throws {
+        let obj1 = try createObject()
+        let obj2 = try createObject()
+        let ex1 = expectation(description: "first object")
+        let ex2 = expectation(description: "second object")
+        let tokens = await [
+            obj1.observe(keyPaths: ["intCol"], on: CustomGlobalActor.shared,
+                               expectChange(obj1, ex1, newValue: 2)),
+            obj2.observe(keyPaths: [\SwiftObject.intCol],
+                               on: CustomGlobalActor.shared,
+                               expectChange(obj2, ex2, newValue: 3))
+        ]
+
+        let realm = obj1.realm!
+        try await realm.asyncWrite {
+            obj1.boolCol = true
+            obj2.boolCol = true
+        }
+        try await realm.asyncWrite {
+            obj1.intCol = 2
+            obj2.intCol = 3
+        }
+        await fulfillment(of: [ex1, ex2], timeout: 2.0)
+        tokens.forEach { $0.invalidate() }
+    }
+
+    // This test consistently crashes inside the Swift runtime when building
+    // with SPM.
+    @MainActor
+    @available(macOS 12.0, iOS 15.0, tvOS 15.0, watchOS 8.0, *)
+    func testAsyncSequenceObserve() async throws {
+        let obj = try createObject()
+        let ex = Locked(expectation(description: "got value"))
+        let task = Task { @MainActor in
+            var value = 0
+            for try await object in valuePublisher(obj).values {
+                XCTAssertIdentical(object, obj)
+                value += 1
+                XCTAssertEqual(object.intCol, value)
+                ex.wrappedValue.fulfill()
+            }
+        }
+
+        for i in 1..<10 {
+            try await obj.realm!.asyncWrite {
+                obj.intCol += 1
+            }
+            await fulfillment(of: [ex.wrappedValue])
+            if i < 9 {
+                ex.wrappedValue = expectation(description: "got value")
+            }
+        }
+        task.cancel()
+        _ = try await task.value
+    }
+
+    @MainActor
+    @available(macOS 12.0, iOS 15.0, tvOS 15.0, watchOS 8.0, *)
+    func testAsyncSequenceObserveCustomActor() async throws {
+        let obj = try createObject()
+        let ex = Locked(expectation(description: "got next"))
+        let task = Task { @CustomGlobalActor in
+            let realm = try await Realm(actor: CustomGlobalActor.shared)
+            let obj = realm.objects(SwiftObject.self).first!
+            var value = 0
+            for try await change in changesetPublisher(obj).values {
+                guard case let .change(object, props) = change else {
+                    return XCTFail("Expected .change, got \(change)")
+                }
+                XCTAssertIdentical(object, obj)
+                value += 1
+                XCTAssertEqual(object.intCol, value)
+                XCTAssertEqual(props.count, 1)
+                let prop = props[0]
+                XCTAssertEqual(prop.name, "intCol")
+                XCTAssertEqual(prop.oldValue as? Int, value - 1)
+                XCTAssertEqual(prop.newValue as? Int, value)
+                ex.wrappedValue.fulfill()
+            }
+            XCTAssertEqual(value, 9)
+            ex.wrappedValue.fulfill()
+        }
+
+        // Use a dummy observation as synchronization to reduce the chance of
+        // writing before the notifier is ready
+        let token = await obj.observe(on: CustomGlobalActor.shared) { (_, _) in }
+
+        for _ in 1..<10 {
+            try await obj.realm!.asyncWrite {
+                obj.intCol += 1
+            }
+            await fulfillment(of: [ex.wrappedValue])
+            ex.wrappedValue = expectation(description: "got next")
+        }
+
+        try await obj.realm!.asyncWrite {
+            obj.realm!.delete(obj)
+        }
+        await fulfillment(of: [ex.wrappedValue])
+        _ = try await task.value
+        token.invalidate()
+    }
+
+    @MainActor
+    @available(macOS 12.0, iOS 15.0, tvOS 15.0, watchOS 8.0, *)
+    func testObserveOnAlreadyCancelledTask() async throws {
+        let obj = try createObject()
+        _ = await Task { @MainActor in
+            withUnsafeCurrentTask { task in
+                task?.cancel()
+            }
+            let token = await obj.observe(on: MainActor.shared) { _, _ in
+                XCTFail("should not have been called")
+            }
+            XCTAssertFalse(token.invalidate())
+        }.value
+    }
+
+    @MainActor
+    @available(macOS 12.0, iOS 15.0, tvOS 15.0, watchOS 8.0, *)
+    func testCancelTaskWhileWaitingForInitial() async throws {
+        // This can't be tested deterministically as it's trying to hit specific
+        // timing windows, so instead spawn a bunch of tasks and hope that at
+        // least one is in each of the interesting states. Not handling all of
+        // the cancel timing correctly is likely to make this test either crash
+        // or hang (if there's some scenario where we fail to call the completion
+        // handler).
+        _ = try createObject().realm!
+        let waitingForRealm = Locked(0)
+        let active = Locked(0)
+        let completed = Locked(0)
+        await withTaskGroup(of: NotificationToken.self) { group in
+            while active.value < 10 {
+                group.addTask { @CustomGlobalActor in
+                    waitingForRealm.withLock { $0 += 1 }
+                    // can throw due to cancellation
+                    guard let realm = try? await Realm(actor: CustomGlobalActor.shared) else {
+                        waitingForRealm.withLock { $0 -= 1 }
+                        return NotificationToken()
+                    }
+                    waitingForRealm.withLock { $0 -= 1 }
+                    active.withLock { $0 += 1 }
+                    let token = await realm.objects(SwiftObject.self).first!.observe(on: CustomGlobalActor.shared) { _, _ in }
+                    completed.withLock { $0 += 1 }
+                    return token
+                }
+
+                // Actor executors aren't fifo, so we can sometimes prevent the
+                // async opens from ever completing by continuously spawning new
+                // tasks
+                while waitingForRealm.value > 10 {
+                    await Task.yield()
+                }
+            }
+            group.cancelAll()
+            await group.waitForAll()
+            XCTAssertEqual(waitingForRealm.value, 0)
+            XCTAssertEqual(active.value, completed.value)
+        }
+    }
+
     // MARK: Equality Tests
 
     func testEqualityForObjectTypeWithPrimaryKey() {
@@ -1740,7 +1881,7 @@ class ObjectTests: TestCase {
                     "floatCol": 4.56 as Float,
                     "doubleCol": 45.6,
                     "stringCol": "b",
-                    "binaryCol": "b".data(using: String.Encoding.utf8)!,
+                    "binaryCol": Data("b".utf8),
                     "dateCol": Date(timeIntervalSince1970: 2),
                     "objectCol": [true],
                     "uuidCol": UUID(),
@@ -1769,7 +1910,7 @@ class ObjectTests: TestCase {
                     "float": [6.6 as Float],
                     "double": [7.7],
                     "string": ["8"],
-                    "data": ["9".data(using: String.Encoding.utf8)!],
+                    "data": [Data("9".utf8)],
                     "date": [Date(timeIntervalSince1970: 10)],
                     "intOpt": [11, nil],
                     "int8Opt": [12, nil],
@@ -1779,7 +1920,7 @@ class ObjectTests: TestCase {
                     "floatOpt": [16.16, nil],
                     "doubleOpt": [17.17, nil],
                     "stringOpt": ["18", nil],
-                    "dataOpt": ["19".data(using: String.Encoding.utf8)!, nil],
+                    "dataOpt": [Data("19".utf8), nil],
                     "dateOpt": [Date(timeIntervalSince1970: 20), nil],
                     "uuid": [UUID()],
                     "uuidOpt": [UUID(), nil],

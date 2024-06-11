@@ -88,14 +88,14 @@ class IgnoredLinkPropertyObject : RLMObject {
     }
 }
 
+@MainActor
 class SwiftRLMRecursingSchemaTestObject : RLMObject {
     @objc dynamic var propertyWithIllegalDefaultValue: SwiftRLMIntObject? = {
         if mayAccessSchema {
             let realm = RLMRealm.default()
             return SwiftRLMIntObject.allObjects().firstObject() as! SwiftRLMIntObject?
-        } else {
-            return nil
         }
+        return nil
     }()
 
     static var mayAccessSchema = false
@@ -113,6 +113,7 @@ class InvalidDictionaryType: FakeObject {
     @objc dynamic var dictionary = RLMDictionary<NSString, SwiftRLMIntObject>(objectClassName: "invalid class", keyType: .string)
 }
 
+@MainActor
 class InitAppendsToArrayProperty : RLMObject {
     @objc dynamic var propertyWithIllegalDefaultValue: RLMArray<InitAppendsToArrayProperty> = {
         if mayAppend {
@@ -120,9 +121,8 @@ class InitAppendsToArrayProperty : RLMObject {
             let array = RLMArray<InitAppendsToArrayProperty>(objectClassName: InitAppendsToArrayProperty.className())
             array.add(InitAppendsToArrayProperty())
             return array
-        } else {
-            return RLMArray<InitAppendsToArrayProperty>(objectClassName: InitAppendsToArrayProperty.className())
         }
+        return RLMArray<InitAppendsToArrayProperty>(objectClassName: InitAppendsToArrayProperty.className())
     }()
 
     static var mayAppend = false
@@ -130,6 +130,53 @@ class InitAppendsToArrayProperty : RLMObject {
 
 class NoProps: FakeObject {
     // no @objc properties
+}
+
+class OnlyComputedSource: RLMObject {
+    @objc dynamic var link: OnlyComputedTarget?
+}
+
+class OnlyComputedTarget: RLMObject {
+    @objc dynamic var backlinks: RLMLinkingObjects<OnlyComputedSource>?
+
+    override class func linkingObjectsProperties() -> [String : RLMPropertyDescriptor] {
+        return ["backlinks": RLMPropertyDescriptor(with: OnlyComputedSource.self, propertyName: "link")]
+    }
+}
+
+class OnlyComputedNoBacklinksProps: FakeObject {
+    var computedProperty: String {
+        return "Test_String"
+    }
+}
+
+@MainActor
+class RequiresObjcName: RLMObject {
+    static var enable = false
+    @MainActor
+    override class func _realmIgnoreClass() -> Bool {
+        return !enable
+    }
+}
+
+class ClassWrappingObjectSubclass {
+    class Inner: RequiresObjcName {
+        @objc dynamic var value = 0
+    }
+}
+struct StructWrappingObjectSubclass {
+    class Inner: RequiresObjcName {
+        @objc dynamic var value = 0
+    }
+}
+enum EnumWrappingObjectSubclass {
+    class Inner: RequiresObjcName {
+        @objc dynamic var value = 0
+    }
+}
+
+private class PrivateClassWithoutExplicitObjcName: RequiresObjcName {
+    @objc dynamic var value = 0
 }
 
 class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
@@ -141,7 +188,26 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
 
     func testShouldRaiseObjectWithoutProperties() {
         assertThrowsWithReasonMatching(RLMObjectSchema(forObjectClass: NoProps.self),
-                                       "No properties are defined for 'NoProps'. Did you remember to mark them with '@objc' in your model?")
+                                       "No properties are defined for 'NoProps'. Did you remember to mark them with '@objc' or '@Persisted' in your model?")
+    }
+    
+    func testShouldNotThrowForObjectWithOnlyBacklinksProps() {
+        let config = RLMRealmConfiguration.default()
+        config.objectClasses = [OnlyComputedTarget.self, OnlyComputedSource.self]
+        config.inMemoryIdentifier = #function
+        let r = try! RLMRealm(configuration: config)
+        try! r.transaction {
+            _ = OnlyComputedTarget.create(in: r, withValue: [])
+        }
+
+        let schema = OnlyComputedTarget().objectSchema
+        XCTAssertEqual(schema.computedProperties.count, 1)
+        XCTAssertEqual(schema.properties.count, 0)
+    }
+
+    func testShouldThrowForObjectWithOnlyComputedNoBacklinksProps() {
+        assertThrowsWithReasonMatching(RLMObjectSchema(forObjectClass: OnlyComputedNoBacklinksProps.self),
+                                       "No properties are defined for 'OnlyComputedNoBacklinksProps'. Did you remember to mark them with '@objc' or '@Persisted' in your model?")
     }
 
     func testSchemaInitWithLinkedToObjectUsingInitWithValue() {
@@ -190,7 +256,7 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
         _ = SwiftRLMLinkedNonDefaultObject(value: [[1]])
         _ = SwiftRLMNonDefaultArrayObject(value: [[[1]]])
         _ = SwiftRLMNonDefaultSetObject(value: [[[1]]])
-        _ = SwiftRLMMutualLink1Object(value: [[[:]]])
+        _ = SwiftRLMMutualLink1Object()
     }
 
     func testCreateUnmanagedObjectWhichCreatesAnotherClassViaInitWithValueDuringSchemaInit() {
@@ -200,7 +266,7 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
         }
 
         _ = InitLinkedToClass(value: [[0]])
-        _ = SwiftRLMCompanyObject(value: [[["Jaden", 20, false]]])
+        _ = SwiftRLMCompanyObject(value: [[["Jaden", 20, false] as [Any]]])
     }
 
     func testInitUnmanagedObjectNotInClassSubsetDuringSchemaInit() {
@@ -219,6 +285,7 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
         }
     }
 
+    @MainActor
     func testPreventsDeadLocks() {
         if isParent {
             XCTAssertEqual(0, runChildAndWait(), "Tests in child process failed")
@@ -229,6 +296,7 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
         assertThrowsWithReasonMatching(RLMSchema.shared(), ".*recursive.*")
     }
 
+    @MainActor
     func testAccessSchemaCreatesObjectWhichAttempsInsertionsToArrayProperty() {
         if isParent {
             XCTAssertEqual(0, runChildAndWait(), "Tests in child process failed")
@@ -245,6 +313,24 @@ class SwiftRLMSchemaTests: RLMMultiProcessTestCase {
     func testInvalidObjectTypeForRLMArray() {
         assertThrowsWithReasonMatching(RLMObjectSchema(forObjectClass: InvalidArrayType.self),
                                        "RLMArray\\<invalid class\\>")
+    }
+
+    @MainActor
+    func testInvalidNestedClass() {
+        if isParent {
+            XCTAssertEqual(0, runChildAndWait(), "Tests in child process failed")
+            return
+        }
+
+        RequiresObjcName.enable = true
+        assertThrowsWithReasonMatching(RLMSchema.sharedSchema(for: ClassWrappingObjectSubclass.Inner.self),
+                                       "Object subclass '.*' must explicitly set the class's objective-c name with @objc\\(ClassName\\) because it is not a top-level public class.")
+        assertThrowsWithReasonMatching(RLMSchema.sharedSchema(for: StructWrappingObjectSubclass.Inner.self),
+                                       "Object subclass '.*' must explicitly set the class's objective-c name with @objc\\(ClassName\\) because it is not a top-level public class.")
+        assertThrowsWithReasonMatching(RLMSchema.sharedSchema(for: EnumWrappingObjectSubclass.Inner.self),
+                                       "Object subclass '.*' must explicitly set the class's objective-c name with @objc\\(ClassName\\) because it is not a top-level public class.")
+        assertThrowsWithReasonMatching(RLMSchema.sharedSchema(for: PrivateClassWithoutExplicitObjcName.self),
+                                               "Object subclass '.*' must explicitly set the class's objective-c name with @objc\\(ClassName\\) because it is not a top-level public class.")
     }
 }
 

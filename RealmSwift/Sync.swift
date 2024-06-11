@@ -16,12 +16,9 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
+import Combine
 import Realm
 import Realm.Private
-
-#if !(os(iOS) && (arch(i386) || arch(arm)))
-import Combine
-#endif
 
 /**
  An object representing an Atlas App Services user.
@@ -36,7 +33,8 @@ public extension User {
     /// with the client from which it was created. On success a new user will be returned with the new linked credentials.
     /// @param credentials The `Credentials` used to link the user to a new identity.
     /// @completion A completion that eventually return `Result.success(User)` with user's data or `Result.failure(Error)`.
-    func linkUser(credentials: Credentials, _ completion: @escaping (Result<User, Error>) -> Void) {
+    @preconcurrency
+    func linkUser(credentials: Credentials, _ completion: @Sendable @escaping (Result<User, Error>) -> Void) {
         self.__linkUser(with: ObjectiveCSupport.convert(object: credentials)) { user, error in
             if let user = user {
                 completion(.success(user))
@@ -44,6 +42,27 @@ public extension User {
                 completion(.failure(error ?? Realm.Error.callFailed))
             }
         }
+    }
+
+    /// Links the currently authenticated user with a new identity, where the identity is defined by the credential
+    /// specified as a parameter. This will only be successful if this `User` is the currently authenticated
+    /// with the client from which it was created. On success a new user will be returned with the new linked credentials.
+    /// @param credentials The `Credentials` used to link the user to a new identity.
+    /// @returns A publisher that eventually return `Result.success` or `Error`.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func linkUser(credentials: Credentials) -> Future<User, Error> {
+        return future { self.linkUser(credentials: credentials, $0) }
+    }
+
+    /// Links the currently authenticated user with a new identity, where the identity is defined by the credential
+    /// specified as a parameter. This will only be successful if this `User` is the currently authenticated
+    /// with the client from which it was created. On success a new user will be returned with the new linked credentials.
+    /// - Parameters:
+    ///   - credentials: The `Credentials` used to link the user to a new identity.
+    /// - Returns:A `User` after successfully update its identity.
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func linkUser(credentials: Credentials) async throws -> User {
+        try await __linkUser(with: ObjectiveCSupport.convert(object: credentials))
     }
 }
 
@@ -61,6 +80,57 @@ public typealias SyncManager = RLMSyncManager
   - see: `RLMSyncTimeoutOptions`
  */
 public typealias SyncTimeoutOptions = RLMSyncTimeoutOptions
+public extension SyncTimeoutOptions {
+    /**
+    Memberwise convenience initializer for SyncTimeoutOptions. All values are
+    in milliseconds, and use a default value if `nil`.
+
+    - Parameters:
+      - connectTimeout: The maximum time to allow for a connection to become
+        fully established. This includes the time to resolve the network
+        address, the TCP connect operation, the SSL handshake, and the
+        WebSocket handshake.
+      - connectionLingerTime: If session multiplexing is enabled, how long to
+        keep connections open while there are no active session.
+      - pingKeepalivePeriod: How long to wait between each ping message sent to
+        the server. The client periodically sends ping messages to the server
+        to check if the connection is still alive. Shorter periods make
+        connection state change notifications more responsive at the cost of
+        battery life (as the antenna will have to wake up more often).
+      - pongKeepaliveTimeout: How long to wait for the server to respond to a
+        ping message. Shorter values make connection state change notifications
+        more responsive, but increase the chance of spurious disconnections.
+      - fastReconnectLimit: When a client first connects to the server, it
+        downloads all data from the server before it begins to upload local
+        changes. This typically reduces the total amount of merging needed and
+        gets the local client into a useful state faster. If a disconnect and
+        reconnect happens within the time span of the fast reconnect limit,
+        this is skipped and the session behaves as if it were continuously
+        connected.
+     */
+    convenience init(connectTimeout: UInt? = nil,
+                     connectionLingerTime: UInt? = nil,
+                     pingKeepalivePeriod: UInt? = nil,
+                     pongKeepaliveTimeout: UInt? = nil,
+                     fastReconnectLimit: UInt? = nil) {
+        self.init()
+        if let connectTimeout {
+            self.connectTimeout = connectTimeout
+        }
+        if let connectionLingerTime {
+            self.connectionLingerTime = connectionLingerTime
+        }
+        if let pingKeepalivePeriod {
+            self.pingKeepalivePeriod = pingKeepalivePeriod
+        }
+        if let pongKeepaliveTimeout {
+            self.pongKeepaliveTimeout = pongKeepaliveTimeout
+        }
+        if let fastReconnectLimit {
+            self.fastReconnectLimit = fastReconnectLimit
+        }
+    }
+}
 
 /**
  A session object which represents communication between the client and server for a specific
@@ -149,16 +219,55 @@ extension SyncError {
     public func deleteRealmUserInfo() -> SyncError.ActionToken? {
         return _nsError.__rlmSync_errorActionToken()
     }
+
+    /**
+     Sync errors which originate from the server also produce server-side logs
+     which may contain useful information. When applicable, this field contains
+     the url of those logs, and `nil` otherwise.
+     */
+    public var serverLogURL: URL? {
+        (userInfo[RLMServerLogURLKey] as? String).flatMap(URL.init)
+    }
+
+    /// Extended information about what was reverted for `.writeRejected` errors.
+    public var compensatingWriteInfo: [CompensatingWriteInfo]? {
+        userInfo[RLMCompensatingWriteInfoKey] as? [CompensatingWriteInfo]
+    }
+}
+
+/// Extended information about a write which was rejected by the server.
+///
+/// The server will sometimes reject writes made by the client for reasons such
+/// as permissions, additional server-side validation failing, or because the
+/// object didn't match any flexible sync subscriptions. When this happens, a
+/// `.writeRejected` error is reported with a non-nil
+/// ``SyncError.compensatingWriteInfo`` field with information about what
+/// writes were rejected and why.
+///
+/// This information is intended for debugging and logging purposes only. The
+/// `reason` strings are generated by the server and are not guaranteed to be
+/// stable, so attempting to programmatically do anything with them will break
+/// without warning.
+public typealias CompensatingWriteInfo = RLMCompensatingWriteInfo
+extension CompensatingWriteInfo {
+    /// The primary key of the object being written to.
+    public var primaryKey: AnyRealmValue {
+        ObjectiveCSupport.convert(value: __primaryKey)
+    }
 }
 
 /**
- An error associated with network requests made to the authentication server. This type of error
- may be returned in the callback block to `SyncUser.logIn()` upon certain types of failed login
- attempts (for example, if the request is malformed or if the server is experiencing an issue).
-
- - see: `RLMSyncAuthError`
+ An error which occurred when making a request to Atlas App Services. Most User
+ and App functions which can fail report errors of this type.
  */
-public typealias SyncAuthError = RLMSyncAuthError
+public typealias AppError = RLMAppError
+
+extension AppError {
+    /// When applicable, the HTTP status code which resulted in this error.
+    var httpStatusCode: Int? {
+        userInfo[RLMHTTPStatusCodeKey] as? Int
+    }
+}
 
 /**
  An enum which can be used to specify the level of logging.
@@ -176,70 +285,47 @@ public typealias SyncLogLevel = RLMSyncLogLevel
 public typealias Provider = RLMIdentityProvider
 
 /**
- * How the Realm client should validate the identity of the server for secure connections.
- *
- * By default, when connecting to Atlas App Services over HTTPS, Realm will
- * validate the server's HTTPS certificate using the system trust store and root
- * certificates. For additional protection against man-in-the-middle (MITM)
- * attacks and similar vulnerabilities, you can pin a certificate or public key,
- * and reject all others, even if they are signed by a trusted CA.
- */
-@frozen public enum ServerValidationPolicy {
-    /// Perform no validation and accept potentially invalid certificates.
-    ///
-    /// - warning: DO NOT USE THIS OPTION IN PRODUCTION.
-    case none
-
-    /// Use the default server trust evaluation based on the system-wide CA
-    /// store. Any certificate signed by a trusted CA will be accepted.
-    case system
-
-    /// Use a specific pinned certificate to validate the server identify.
-    ///
-    /// This will only connect to a server if one of the server certificates
-    /// matches the certificate stored at the given local path and that
-    /// certificate has a valid trust chain.
-    ///
-    /// On macOS, the certificate files may be in any of the formats supported
-    /// by SecItemImport(), including PEM and .cer (see SecExternalFormat for a
-    /// complete list of possible formats). On iOS and other platforms, only
-    /// DER .cer files are supported.
-    case pinCertificate(path: URL)
-}
-
-/**
  An enum used to determines file recovery behavior in the event of a client reset.
+ Defaults to ``.recoverUnsyncedChanges``.
 
  - see: `RLMClientResetMode`
  - see: https://docs.mongodb.com/realm/sync/error-handling/client-resets/
 */
-public enum ClientResetMode {
-    /// - see: `RLMClientResetModeManual`
-    case manual
-    /// - see: `RLMClientResetModeDiscardLocal` for more details on `.discardLocal` behavior
+@frozen public enum ClientResetMode {
+    /// All unsynchronized local changes are automatically discarded and the local state is
+    /// automatically reverted to the most recent state from the server. Unsynchronized changes
+    /// can then be recovered in the post-client-reset callback block.
     ///
-    /// The first `.discardLocal` function argument notifies prior to a client reset occurring.
-    /// The `Realm` argument contains a frozen copy of the Realm state prior to client reset.
+    /// If ``.discardLocal`` is enabled but the client reset operation is unable to complete
+    /// then the client reset process reverts to manual mode. Example: During a destructive schema change this
+    /// mode will fail and invoke the manual client reset handler.
+    ///
+    /// - parameter beforeReset: a function invoked prior to a client reset occurring.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - seeAlso ``RLMClientResetBeforeBlock``
+
+    /// Example Usage
     /// ```
-    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardLocal({ beforeRealm in
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges({ before in
     ///    var recoveryConfig = Realm.Configuration()
     ///    recoveryConfig.fileURL = myRecoveryPath
     ///    do {
-    ///        beforeRealm.writeCopy(configuration: recoveryConfig)
+    ///        before.writeCopy(configuration: recoveryConfig)
     ///        // The copied realm could be used later for recovery, debugging, reporting, etc.
     ///    } catch {
     ///        // handle error
     ///    }
     /// }, nil))
     /// ```
-    ///  For more details on ((Realm) -> Void)? = nil,
-    /// - see: `RLMClientResetBeforeBlock`
     ///
-    /// The second `.discardLocal` function argument notifies after a client reset has occurred.
-    /// - Within this function, the first `Realm` argument contains a frozen copy of the local Realm state prior to client reset.
-    /// - Within this function, the second `Realm` argument contains the Realm state after client reset.
+    /// - parameter afterReset: a function invoked  after the client reset reset process has occurred.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - parameter after: a live instance of the realm after client reset.
+    /// - seeAlso ``RLMClientResetAfterBlock``
+    ///
+    /// Example Usage
     /// ```
-    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardLocal( nil, { beforeRealm, afterRealm in
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges( nil, { before, after in
     /// // This block could be used to add custom recovery logic, back-up a realm file, send reporting, etc.
     /// for object in before.objects(myClass.self) {
     ///     let res = after.objects(myClass.self)
@@ -251,16 +337,197 @@ public enum ClientResetMode {
     /// }
     /// }))
     /// ```
-    ///  For more details on the second block: ((Realm, Realm) -> Void)? = nil,
-    /// - see: `RLMClientResetAfterBlock`
-    case discardLocal(((Realm) -> Void)? = nil, ((Realm, Realm) -> Void)? = nil)
+    @available(*, deprecated, message: "Use discardUnsyncedChanges")
+    @preconcurrency
+    case discardLocal(beforeReset: (@Sendable (_ before: Realm) -> Void)? = nil,
+                      afterReset: (@Sendable (_ before: Realm, _ after: Realm) -> Void)? = nil)
+    /// All unsynchronized local changes are automatically discarded and the local state is
+    /// automatically reverted to the most recent state from the server. Unsynchronized changes
+    /// can then be recovered in the post-client-reset callback block.
+    ///
+    /// If ``.discardUnsyncedChanges`` is enabled but the client reset operation is unable to complete
+    /// then the client reset process reverts to manual mode. Example: During a destructive schema change this
+    /// mode will fail and invoke the manual client reset handler.
+    ///
+    /// - parameter beforeReset: a function invoked prior to a client reset occurring.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - seeAlso ``RLMClientResetBeforeBlock``
+
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges({ before in
+    ///    var recoveryConfig = Realm.Configuration()
+    ///    recoveryConfig.fileURL = myRecoveryPath
+    ///    do {
+    ///        before.writeCopy(configuration: recoveryConfig)
+    ///        // The copied realm could be used later for recovery, debugging, reporting, etc.
+    ///    } catch {
+    ///        // handle error
+    ///    }
+    /// }, nil))
+    /// ```
+    ///
+    /// - parameter afterReset: a function invoked  after the client reset reset process has occurred.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - parameter after: a live instance of the realm after client reset.
+    /// - seeAlso ``RLMClientResetAfterBlock``
+    ///
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges( nil, { before, after in
+    /// // This block could be used to add custom recovery logic, back-up a realm file, send reporting, etc.
+    /// for object in before.objects(myClass.self) {
+    ///     let res = after.objects(myClass.self)
+    ///     if (res.filter("primaryKey == %@", object.primaryKey).first != nil) {
+    ///         // ...custom recovery logic...
+    ///     } else {
+    ///         // ...custom recovery logic...
+    ///     }
+    /// }
+    /// }))
+    /// ```
+    @preconcurrency
+    case discardUnsyncedChanges(beforeReset: (@Sendable (_ before: Realm) -> Void)? = nil,
+                                afterReset: (@Sendable (_ before: Realm, _ after: Realm) -> Void)? = nil)
+    /// The client device will download a realm realm which reflects the latest
+    /// state of the server after a client reset. A recovery process is run locally in
+    /// an attempt to integrate the server version with any local changes from
+    /// before the client reset occurred.
+    ///
+    /// The changes are integrated with the following rules:
+    /// 1. Objects created locally that were not synced before client reset will be integrated.
+    /// 2. If an object has been deleted on the server, but was modified on the client, the delete takes precedence and the update is discarded
+    /// 3. If an object was deleted on the client, but not the server, then the client delete instruction is applied.
+    /// 4. In the case of conflicting updates to the same field, the client update is applied.
+    ///
+    /// If the recovery integration fails, the client reset process falls back to ``ClientResetMode.manual``.
+    /// The recovery integration will fail if the "Client Recovery" setting is not enabled on the server.
+    /// Integration may also fail in the event of an incompatible schema change.
+    ///
+    /// - parameter beforeReset: a function invoked prior to a client reset occurring.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - seeAlso ``RLMClientResetBeforeBlock``
+
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges({ before in
+    ///    var recoveryConfig = Realm.Configuration()
+    ///    recoveryConfig.fileURL = myRecoveryPath
+    ///    do {
+    ///        before.writeCopy(configuration: recoveryConfig)
+    ///        // The copied realm could be used later for recovery, debugging, reporting, etc.
+    ///    } catch {
+    ///        // handle error
+    ///    }
+    /// }, nil))
+    /// ```
+    ///
+    /// - parameter afterReset: a function invoked  after the client reset reset process has occurred.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - parameter after: a live instance of the realm after client reset.
+    /// - seeAlso ``RLMClientResetAfterBlock``
+    ///
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges( nil, { before, after in
+    /// // This block could be used to add custom recovery logic, back-up a realm file, send reporting, etc.
+    /// for object in before.objects(myClass.self) {
+    ///     let res = after.objects(myClass.self)
+    ///     if (res.filter("primaryKey == %@", object.primaryKey).first != nil) {
+    ///         // ...custom recovery logic...
+    ///     } else {
+    ///         // ...custom recovery logic...
+    ///     }
+    /// }
+    /// }))
+    /// ```
+    @preconcurrency
+    case recoverUnsyncedChanges(beforeReset: (@Sendable (_ before: Realm) -> Void)? = nil,
+                                afterReset: (@Sendable (_ before: Realm, _ after: Realm) -> Void)? = nil)
+    /// The client device will download a realm with objects reflecting the latest version of the server. A recovery
+    /// process is run locally in an attempt to integrate the server version with any local changes from before the
+    /// client reset occurred.
+    ///
+    /// The changes are integrated with the following rules:
+    /// 1. Objects created locally that were not synced before client reset will be integrated.
+    /// 2. If an object has been deleted on the server, but was modified on the client, the delete takes precedence and the update is discarded
+    /// 3. If an object was deleted on the client, but not the server, then the client delete instruction is applied.
+    /// 4. In the case of conflicting updates to the same field, the client update is applied.
+    ///
+    /// If the recovery integration fails, the client reset process falls back to ``ClientResetMode.discardUnsyncedChanges``.
+    /// The recovery integration will fail if the "Client Recovery" setting is not enabled on the server.
+    /// Integration may also fail in the event of an incompatible schema change.
+    ///
+    /// - parameter beforeReset: a function invoked prior to a client reset occurring.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - seeAlso ``RLMClientResetBeforeBlock``
+
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges({ before in
+    ///    var recoveryConfig = Realm.Configuration()
+    ///    recoveryConfig.fileURL = myRecoveryPath
+    ///    do {
+    ///        before.writeCopy(configuration: recoveryConfig)
+    ///        // The copied realm could be used later for recovery, debugging, reporting, etc.
+    ///    } catch {
+    ///        // handle error
+    ///    }
+    /// }, nil))
+    /// ```
+    ///
+    /// - parameter afterReset: a function invoked  after the client reset reset process has occurred.
+    /// - parameter before: a frozen copy of the local Realm state prior to client reset.
+    /// - parameter after: a live instance of the realm after client reset.
+    /// - seeAlso ``RLMClientResetAfterBlock``
+    ///
+    /// Example Usage
+    /// ```
+    /// user.configuration(partitionValue: "myPartition", clientResetMode: .discardUnsyncedChanges( nil, { before, after in
+    /// // This block could be used to add custom recovery logic, back-up a realm file, send reporting, etc.
+    /// for object in before.objects(myClass.self) {
+    ///     let res = after.objects(myClass.self)
+    ///     if (res.filter("primaryKey == %@", object.primaryKey).first != nil) {
+    ///         // ...custom recovery logic...
+    ///     } else {
+    ///         // ...custom recovery logic...
+    ///     }
+    /// }
+    /// }))
+    /// ```
+    @preconcurrency
+    case recoverOrDiscardUnsyncedChanges(beforeReset: (@Sendable (_ before: Realm) -> Void)? = nil,
+                                         afterReset: (@Sendable (_ before: Realm, _ after: Realm) -> Void)? = nil)
+    /// - seeAlso: ``RLMClientResetModeManual``
+    ///
+    /// The manual client reset mode handler can be set in two places:
+    /// 1. As an ErrorReportingBlock argument in the ClientResetMode enum (``ErrorReportingBlock?` = nil`).
+    /// 2. As an ErrorReportingBlock in the ``SyncManager.errorHandler`` property.
+    /// - seeAlso: ``RLMSyncManager.errorHandler``
+    ///
+    /// During an ``RLMSyncErrorClientResetError`` the block executed is determined by the following rules
+    /// - If an error reporting block is set in ``ClientResetMode`` and the ``SyncManager``, the ``ClientResetMode`` block will be executed.
+    /// - If an error reporting block is set in either the ``ClientResetMode`` or the ``SyncManager``, but not both, the single block will execute.
+    /// - If no block is set in either location, the client reset will not be handled. The application will likely need to be restarted and unsynced local changes may be lost.
+    /// - note: The ``SyncManager.errorHandler`` is still invoked under all ``RLMSyncError``s *other than* ``RLMSyncErrorClientResetError``.
+    /// - seeAlso ``RLMSyncError`` for an exhaustive list.
+    @preconcurrency
+    case manual(errorHandler: ErrorReportingBlock? = nil)
 }
+
+
+/**
+ A configuration controlling how the initial subscriptions are populated when a Realm file is first opened.
+
+ - see: `RLMInitialSubscriptionsConfiguration`
+ */
+public typealias InitialSubscriptionsConfiguration = RLMInitialSubscriptionsConfiguration
 
 /**
  A `SyncConfiguration` represents configuration parameters for Realms intended to sync with
  Atlas App Services.
  */
-@frozen public struct SyncConfiguration {
+@frozen public struct SyncConfiguration: Sendable {
     /// The `SyncUser` who owns the Realm that this configuration should open.
     public var user: User {
         config.user
@@ -276,18 +543,25 @@ public enum ClientResetMode {
     }
 
     /**
-     An enum which determines file recovery behvaior in the event of a client reset.
-     - note: Defaults to `.manual`
+     An enum which determines file recovery behavior in the event of a client reset.
+     - note: Defaults to ``.recoverUnsyncedChanges``
 
-     - see: `ClientResetMode` and `RLMClientResetMode`
+     - see: ``ClientResetMode`` and ``RLMClientResetMode``
      - see: https://docs.mongodb.com/realm/sync/error-handling/client-resets/
     */
     public var clientResetMode: ClientResetMode {
         switch config.clientResetMode {
         case .manual:
-            return .manual
-        case .discardLocal:
-            return .discardLocal(ObjectiveCSupport.convert(object: config.beforeClientReset), ObjectiveCSupport.convert(object: config.afterClientReset))
+            return .manual(errorHandler: config.manualClientResetHandler)
+        case  .discardUnsyncedChanges, .discardLocal:
+            return .discardUnsyncedChanges(beforeReset: ObjectiveCSupport.convert(object: config.beforeClientReset),
+                                           afterReset: ObjectiveCSupport.convert(object: config.afterClientReset))
+        case .recoverUnsyncedChanges:
+            return .recoverUnsyncedChanges(beforeReset: ObjectiveCSupport.convert(object: config.beforeClientReset),
+                                           afterReset: ObjectiveCSupport.convert(object: config.afterClientReset))
+        case .recoverOrDiscardUnsyncedChanges:
+            return .recoverOrDiscardUnsyncedChanges(beforeReset: ObjectiveCSupport.convert(object: config.beforeClientReset),
+                                                    afterReset: ObjectiveCSupport.convert(object: config.afterClientReset))
         @unknown default:
             fatalError()
         }
@@ -303,7 +577,14 @@ public enum ClientResetMode {
         config.cancelAsyncOpenOnNonFatalErrors
     }
 
-    internal let config: RLMSyncConfiguration
+    /**
+     A configuration that controls how initial subscriptions are populated when the Realm is opened.
+     */
+    public var initialSubscriptions: InitialSubscriptionsConfiguration? {
+        config.initialSubscriptions
+    }
+
+    @Unchecked internal var config: RLMSyncConfiguration
     internal init(config: RLMSyncConfiguration) {
         self.config = config
     }
@@ -324,19 +605,17 @@ public enum ClientResetMode {
 /// The second and final argument is the completion handler to call when the function call is complete.
 /// This handler is executed on a non-main global `DispatchQueue`.
 @dynamicMemberLookup
-@frozen public struct Functions {
-
+@frozen public struct Functions: Sendable {
     private let user: User
-
     fileprivate init(user: User) {
         self.user = user
     }
 
     /// A closure type for receiving the completion of a remote function call.
-    public typealias FunctionCompletionHandler = (AnyBSON?, Error?) -> Void
+    public typealias FunctionCompletionHandler = @Sendable (AnyBSON?, Error?) -> Void
 
     /// A closure type for the dynamic remote function type.
-    public typealias Function = ([AnyBSON], @escaping FunctionCompletionHandler) -> Void
+    public typealias Function = @Sendable ([AnyBSON], @escaping FunctionCompletionHandler) -> Void
 
     /// The implementation of @dynamicMemberLookup that allows for dynamic remote function calls.
     public subscript(dynamicMember string: String) -> Function {
@@ -349,12 +628,13 @@ public enum ClientResetMode {
     }
 
     /// A closure type for receiving the completion result of a remote function call.
-    public typealias ResultFunctionCompletionHandler = (Result<AnyBSON, Error>) -> Void
+    public typealias ResultFunctionCompletionHandler = @Sendable (Result<AnyBSON, Error>) -> Void
 
     /// A closure type for the dynamic remote function type.
-    public typealias ResultFunction = ([AnyBSON], @escaping ResultFunctionCompletionHandler) -> Void
+    public typealias ResultFunction = @Sendable ([AnyBSON], @escaping ResultFunctionCompletionHandler) -> Void
 
     /// The implementation of @dynamicMemberLookup that allows for dynamic remote function calls with a `ResultFunctionCompletionHandler` completion.
+    @preconcurrency
     public subscript(dynamicMember string: String) -> ResultFunction {
         return { (arguments: [AnyBSON], completionHandler: @escaping ResultFunctionCompletionHandler) in
             let objcArgs = arguments.map(ObjectiveCSupport.convertBson)
@@ -383,11 +663,10 @@ public enum ClientResetMode {
 /// The dynamic member name (`sum` in the above example) is provided by `@dynamicMemberLookup`
 /// which is directly associated with the function name.
 @dynamicCallable
-public struct FunctionCallable {
+public struct FunctionCallable: Sendable {
     fileprivate let name: String
     fileprivate let user: User
 
-    #if !(os(iOS) && (arch(i386) || arch(arm)))
     /// The implementation of @dynamicCallable that allows  for `Future<AnyBSON, Error>` callable return.
     ///
     ///     let cancellable = user.functions.sum([1, 2, 3, 4, 5])
@@ -396,9 +675,10 @@ public struct FunctionCallable {
     ///        // Returned value from function
     ///     })
     ///
-    @available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, macCatalyst 13.0, macCatalystApplicationExtension 13.0, *)
+    @preconcurrency
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
     public func dynamicallyCall(withArguments args: [[AnyBSON]]) -> Future<AnyBSON, Error> {
-        return Future<AnyBSON, Error> { promise in
+        return future { promise in
             let objcArgs = args.first!.map(ObjectiveCSupport.convertBson)
             self.user.__callFunctionNamed(name, arguments: objcArgs) { (bson: RLMBSON?, error: Error?) in
                 if let b = bson.map(ObjectiveCSupport.convertBson), let bson = b {
@@ -409,94 +689,72 @@ public struct FunctionCallable {
             }
         }
     }
-    #else
-    /// :nodoc:
-    public func dynamicallyCall(withArguments args: [Never]) {
-        //   noop
+}
+
+private func setSyncFields(_ config: RLMRealmConfiguration, clientResetMode: ClientResetMode,
+                           cancelAsyncOpenOnNonFatalErrors: Bool) {
+    let syncConfig = config.syncConfiguration!
+    syncConfig.cancelAsyncOpenOnNonFatalErrors = cancelAsyncOpenOnNonFatalErrors
+    switch clientResetMode {
+    case .manual(let block):
+        syncConfig.clientResetMode = .manual
+        syncConfig.manualClientResetHandler = block
+    case .discardUnsyncedChanges(let beforeBlock, let afterBlock),
+            .discardLocal(let beforeBlock, let afterBlock):
+        syncConfig.clientResetMode = .discardUnsyncedChanges
+        syncConfig.beforeClientReset = ObjectiveCSupport.convert(object: beforeBlock)
+        syncConfig.afterClientReset = ObjectiveCSupport.convert(object: afterBlock)
+    case .recoverUnsyncedChanges(let beforeBlock, let afterBlock):
+        syncConfig.clientResetMode = .recoverUnsyncedChanges
+        syncConfig.beforeClientReset = ObjectiveCSupport.convert(object: beforeBlock)
+        syncConfig.afterClientReset = ObjectiveCSupport.convert(object: afterBlock)
+    case .recoverOrDiscardUnsyncedChanges(let beforeBlock, let afterBlock):
+        syncConfig.clientResetMode = .recoverOrDiscardUnsyncedChanges
+        syncConfig.beforeClientReset = ObjectiveCSupport.convert(object: beforeBlock)
+        syncConfig.afterClientReset = ObjectiveCSupport.convert(object: afterBlock)
     }
-    #endif
+
+    config.syncConfiguration = syncConfig
 }
 
 public extension User {
-
-    /**
-     Create a sync configuration instance.
-
-     Additional settings can be optionally specified. Descriptions of these
-     settings follow.
-
-     `ClientResetMode` is `.manual` by default.
-
-     - warning: NEVER disable SSL validation for a system running in production.
-     */
-    func configuration<T: BSON>(partitionValue: T) -> Realm.Configuration {
-        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)))
-        return ObjectiveCSupport.convert(object: config)
-    }
-
     /**
      Create a sync configuration instance.
 
      - parameter partitionValue: The `BSON` value the Realm is partitioned on.
-     - parameter clientResetMode: Determines file recovery behavior during a client reset.
-     - parameter notifyBeforeClientReset: A callback which notifies prior to a client reset occurring. See: `notifyBeforeClientReset`.
-     - parameter notifyAfterClientReset: A callback which notifies after a client reset has occurred. See: `notifyAfterClientReset`.
+     - parameter clientResetMode: Determines file recovery behavior during a client reset. `.recoverUnsyncedChanges` by default.
+     - parameter cancelAsyncOpenOnNonFatalErrors: By default, Realm.asyncOpen()
+     swallows non-fatal connection errors such as a connection attempt timing
+     out and simply retries until it succeeds. If this is set to `true`, instead
+     the error will be reported to the callback and the async open will be
+     cancelled.
      */
+    @preconcurrency
     func configuration<T: BSON>(partitionValue: T,
-                                clientResetMode: ClientResetMode) -> Realm.Configuration {
-        var config: RLMRealmConfiguration
-        switch clientResetMode {
-        case .manual:
-            config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)),
-                                              clientResetMode: .manual)
-        case .discardLocal(let beforeClientReset, let afterClientReset):
-            config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)),
-                                              clientResetMode: .discardLocal,
-                                              notifyBeforeReset: ObjectiveCSupport.convert(object: beforeClientReset),
-                                              notifyAfterReset: ObjectiveCSupport.convert(object: afterClientReset))
-        }
-        return ObjectiveCSupport.convert(object: config)
+                                clientResetMode: ClientResetMode = .recoverUnsyncedChanges(beforeReset: nil, afterReset: nil),
+                                cancelAsyncOpenOnNonFatalErrors: Bool = false) -> Realm.Configuration {
+        return configuration(partitionValue: AnyBSON(partitionValue),
+                             clientResetMode: clientResetMode,
+                             cancelAsyncOpenOnNonFatalErrors: cancelAsyncOpenOnNonFatalErrors)
     }
 
     /**
      Create a sync configuration instance.
 
      - parameter partitionValue: Takes `nil` as a partition value.
+     - parameter clientResetMode: Determines file recovery behavior during a client reset. `.recoverUnsyncedChanges` by default.
      - parameter cancelAsyncOpenOnNonFatalErrors: By default, Realm.asyncOpen()
      swallows non-fatal connection errors such as a connection attempt timing
      out and simply retries until it succeeds. If this is set to `true`, instead
      the error will be reported to the callback and the async open will be
      cancelled.
-
-     - warning: NEVER disable SSL validation for a system running in production.
      */
+    @preconcurrency
     func configuration(partitionValue: AnyBSON,
+                       clientResetMode: ClientResetMode = .recoverUnsyncedChanges(beforeReset: nil, afterReset: nil),
                        cancelAsyncOpenOnNonFatalErrors: Bool = false) -> Realm.Configuration {
-        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: partitionValue))
-        let syncConfig = config.syncConfiguration!
-        syncConfig.cancelAsyncOpenOnNonFatalErrors = cancelAsyncOpenOnNonFatalErrors
-        config.syncConfiguration = syncConfig
-        return ObjectiveCSupport.convert(object: config)
-    }
-
-    /**
-     Create a sync configuration instance.
-
-     - parameter partitionValue: The `BSON` value the Realm is partitioned on.
-     - parameter cancelAsyncOpenOnNonFatalErrors: By default, Realm.asyncOpen()
-     swallows non-fatal connection errors such as a connection attempt timing
-     out and simply retries until it succeeds. If this is set to `true`, instead
-     the error will be reported to the callback and the async open will be
-     cancelled.
-
-     - warning: NEVER disable SSL validation for a system running in production.
-     */
-    func configuration<T: BSON>(partitionValue: T,
-                                cancelAsyncOpenOnNonFatalErrors: Bool = false) -> Realm.Configuration {
-        let config = self.__configuration(withPartitionValue: ObjectiveCSupport.convert(object: AnyBSON(partitionValue)))
-        let syncConfig = config.syncConfiguration!
-        syncConfig.cancelAsyncOpenOnNonFatalErrors = cancelAsyncOpenOnNonFatalErrors
-        config.syncConfiguration = syncConfig
+        let config = __configuration(withPartitionValue: ObjectiveCSupport.convert(object: partitionValue))
+        setSyncFields(config, clientResetMode: clientResetMode, cancelAsyncOpenOnNonFatalErrors: cancelAsyncOpenOnNonFatalErrors)
         return ObjectiveCSupport.convert(object: config)
     }
 
@@ -561,7 +819,7 @@ public extension SyncSession {
      Progress notification blocks can be registered on sessions if your app wishes to be informed
      how many bytes have been uploaded or downloaded, for example to show progress indicator UIs.
      */
-    enum ProgressDirection {
+    enum ProgressDirection: Sendable {
         /// For monitoring upload progress.
         case upload
         /// For monitoring download progress.
@@ -574,7 +832,7 @@ public extension SyncSession {
      Progress notification blocks can be registered on sessions if your app wishes to be informed
      how many bytes have been uploaded or downloaded, for example to show progress indicator UIs.
      */
-    enum ProgressMode {
+    enum ProgressMode: Sendable {
         /**
          The block will be called forever, or until it is unregistered by calling
          `ProgressNotificationToken.invalidate()`.
@@ -604,11 +862,15 @@ public extension SyncSession {
     typealias ProgressNotificationToken = RLMProgressNotificationToken
 
     /**
-     A struct encapsulating progress information, as well as useful helper methods.
+     A struct encapsulating progress information.
      */
-    struct Progress {
+    struct Progress: Sendable {
+        private let _transferredBytes: Int // NEXT-MAJOR remove storage fields and deprecated props
+        private let _transferrableBytes: Int // NEXT-MAJOR remove storage fields and deprecated props
+
         /// The number of bytes that have been transferred.
-        public let transferredBytes: Int
+        @available(*, deprecated, message: "Use progressEstimate")
+        public var transferredBytes: Int { return _transferredBytes }
 
         /**
          The total number of transferrable bytes (bytes that have been transferred,
@@ -619,27 +881,36 @@ public extension SyncSession {
          If the notification block is tracking uploads, this number represents the size of the
          changesets representing the local changes on this client.
          */
-        public let transferrableBytes: Int
+        @available(*, deprecated, message: "Use progressEstimate")
+        public var transferrableBytes: Int { return _transferrableBytes }
+
+        /**
+         A value between 0.0 and 1.0 representing the estimated transfer progress. This value is precise for
+         uploads, but will be based on historical data and certain heuristics applied by the server for downloads.
+         
+         Whenever the progress reporting mode is `forCurrentlyOutstandingWork`, that value
+         will monotonically increase until it reaches 1.0. If the progress mode is `reportIndefinitely`, the
+         value may either increase or decrease as new data needs to be transferred.
+         */
+        public let progressEstimate: Double
 
         /// The fraction of bytes transferred out of all transferrable bytes. If this value is 1,
         /// no bytes are waiting to be transferred (either all bytes have already been transferred,
         /// or there are no bytes to be transferred in the first place).
+        @available(*, deprecated, message: "Use progressEstimate", renamed: "progressEstimate")
         public var fractionTransferred: Double {
-            if transferrableBytes == 0 {
-                return 1
-            }
-            let percentage = Double(transferredBytes) / Double(transferrableBytes)
-            return percentage > 1 ? 1 : percentage
+            return progressEstimate
         }
 
-        /// Whether all pending bytes have already been transferred.
+        /// Whether all pending data has already been transferred.
         public var isTransferComplete: Bool {
-            return transferredBytes >= transferrableBytes
+            return progressEstimate == 1.0
         }
 
-        internal init(transferred: UInt, transferrable: UInt) {
-            transferredBytes = Int(transferred)
-            transferrableBytes = Int(transferrable)
+        internal init(transferred: UInt, transferrable: UInt, estimate: Double) {
+            _transferredBytes = Int(transferred)
+            _transferrableBytes = Int(transferrable)
+            progressEstimate = estimate
         }
     }
 
@@ -672,14 +943,55 @@ public extension SyncSession {
 
      - see: `ProgressDirection`, `Progress`, `ProgressNotificationToken`
      */
+    @preconcurrency
     func addProgressNotification(for direction: ProgressDirection,
                                  mode: ProgressMode,
-                                 block: @escaping (Progress) -> Void) -> ProgressNotificationToken? {
-        return __addProgressNotification(for: (direction == .upload ? .upload : .download),
-                                         mode: (mode == .reportIndefinitely
-                                            ? .reportIndefinitely
-                                            : .forCurrentlyOutstandingWork)) { transferred, transferrable in
-                                                block(Progress(transferred: transferred, transferrable: transferrable))
+                                 block: @Sendable @escaping (Progress) -> Void) -> ProgressNotificationToken? {
+        return __addSyncProgressNotification(for: (direction == .upload ? .upload : .download),
+                                             mode: (mode == .reportIndefinitely
+                                                    ? .reportIndefinitely
+                                                    : .forCurrentlyOutstandingWork)) { progress in
+            block(Progress(transferred: progress.transferredBytes, transferrable: progress.transferrableBytes, estimate: progress.progressEstimate))
+        }
+    }
+
+    /**
+     Wait for pending uploads or downloads to complete or the session to expire, and dispatch the callback onto the specified queue.
+     - parameter direction: The transfer direction (upload or download) to wait for.
+     - parameter queue:     The queue to dispatch the callback onto.
+     - parameter block:     The block to invoke when waiting is complete.
+
+     - see: `ProgressDirection`
+     - warning: This method is not meant to be used except in special cases, notably for testing.
+     */
+    func wait(for direction: ProgressDirection,
+              queue: DispatchQueue? = nil,
+              block: @Sendable @escaping (Error?) -> Void) {
+        switch direction {
+        case .upload:
+            __waitForUploadCompletion(on: queue, callback: block)
+        case .download:
+            __waitForDownloadCompletion(on: queue, callback: block)
+        }
+    }
+
+    /**
+     Wait for pending uploads or downloads to complete or the session to expire.
+     - parameter direction: The transfer direction (upload or download) to wait for.
+
+     - see: `ProgressDirection`
+     - warning: This method is not meant to be used except in special cases, notably for testing.
+     */
+    @available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
+    func wait(for direction: ProgressDirection) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            wait(for: direction) { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            }
         }
     }
 }
@@ -701,38 +1013,21 @@ extension Realm {
     }
 }
 
-#if !(os(iOS) && (arch(i386) || arch(arm)))
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, macCatalyst 13.0, macCatalystApplicationExtension 13.0, *)
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 public extension User {
     /// Refresh a user's custom data. This will, in effect, refresh the user's auth session.
     /// @returns A publisher that eventually return `Dictionary` with user's data or `Error`.
     func refreshCustomData() -> Future<[AnyHashable: Any], Error> {
-        return Future { self.refreshCustomData($0) }
+        return future { self.refreshCustomData($0) }
     }
 
-    /// Links the currently authenticated user with a new identity, where the identity is defined by the credential
-    /// specified as a parameter. This will only be successful if this `User` is the currently authenticated
-    /// with the client from which it was created. On success a new user will be returned with the new linked credentials.
-    /// @param credentials The `Credentials` used to link the user to a new identity.
-    /// @returns A publisher that eventually return `Result.success` or `Error`.
-    func linkUser(credentials: Credentials) -> Future<User, Error> {
-        return Future { self.linkUser(credentials: credentials, $0) }
-    }
 
     /// Removes the user
     /// This logs out and destroys the session related to this user. The completion block will return an error
     /// if the user is not found or is already removed.
     /// @returns A publisher that eventually return `Result.success` or `Error`.
     func remove() -> Future<Void, Error> {
-        return Future<Void, Error> { promise in
-            self.remove { error in
-                if let error = error {
-                    promise(.failure(error))
-                } else {
-                    promise(.success(()))
-                }
-            }
-        }
+        promisify(remove(completion:))
     }
 
     /// Logs out the current user
@@ -740,15 +1035,7 @@ public extension User {
     //// If the logout request fails, this method will still clear local authentication state.
     /// @returns A publisher that eventually return `Result.success` or `Error`.
     func logOut() -> Future<Void, Error> {
-        return Future<Void, Error> { promise in
-            self.logOut { error in
-                if let error = error {
-                    promise(.failure(error))
-                } else {
-                    promise(.success(()))
-                }
-            }
-        }
+        promisify(logOut(completion:))
     }
 
     /// Permanently deletes this user from your Atlas App Services app.
@@ -756,32 +1043,22 @@ public extension User {
     /// If the delete request fails, the local authentication state will be untouched.
     /// @returns A publisher that eventually return `Result.success` or `Error`.
     func delete() -> Future<Void, Error> {
-        return Future<Void, Error> { promise in
-            self.delete { error in
-                if let error = error {
-                    promise(.failure(error))
-                } else {
-                    promise(.success(()))
-                }
-            }
-        }
+        promisify(delete(completion:))
     }
 }
 
 /// :nodoc:
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, macCatalyst 13.0, macCatalystApplicationExtension 13.0, *)
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 @frozen public struct UserSubscription: Subscription {
-    private let user: User
     private let token: RLMUserSubscriptionToken
 
-    internal init(user: User, token: RLMUserSubscriptionToken) {
-        self.user = user
+    internal init(token: RLMUserSubscriptionToken) {
         self.token = token
     }
 
     /// A unique identifier for identifying publisher streams.
     public var combineIdentifier: CombineIdentifier {
-        return CombineIdentifier(NSNumber(value: token.value))
+        return CombineIdentifier(token)
     }
 
     /// This function is not implemented.
@@ -792,12 +1069,12 @@ public extension User {
 
     /// Stop emitting values on this subscription.
     public func cancel() {
-        user.unsubscribe(token)
+        token.unsubscribe()
     }
 }
 
 /// :nodoc:
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, macCatalyst 13.0, macCatalystApplicationExtension 13.0, *)
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 public class UserPublisher: Publisher {
     /// This publisher cannot fail.
     public typealias Failure = Never
@@ -812,29 +1089,31 @@ public class UserPublisher: Publisher {
 
     /// :nodoc:
     public func receive<S>(subscriber: S) where S: Subscriber, S.Failure == Never, Output == S.Input {
-        let token = user.subscribe { _ in
-            _ = subscriber.receive(self.user)
+        let token = user.subscribe { user in
+            _ = subscriber.receive(user)
         }
 
-        subscriber.receive(subscription: UserSubscription(user: user, token: token))
+        subscriber.receive(subscription: UserSubscription(token: token))
     }
 }
 
-@available(OSX 10.15, watchOS 6.0, iOS 13.0, iOSApplicationExtension 13.0, OSXApplicationExtension 10.15, tvOS 13.0, macCatalyst 13.0, macCatalystApplicationExtension 13.0, *)
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension User: ObservableObject {
     /// A publisher that emits Void each time the user changes.
     ///
     /// Despite the name, this actually emits *after* the user has changed.
-    public var objectWillChange: UserPublisher {
-        return UserPublisher(self)
+    public var objectWillChange: AnyPublisher<UserPublisher.Output, UserPublisher.Failure> {
+        return UserPublisher(self).receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 }
-#endif
 
 public extension User {
+    // NEXT-MAJOR: This function returns the incorrect type. It should be Document
+    // rather than `[AnyHashable: Any]`
     /// Refresh a user's custom data. This will, in effect, refresh the user's auth session.
     /// @completion A completion that eventually return `Result.success(Dictionary)` with user's data or `Result.failure(Error)`.
-    func refreshCustomData(_ completion: @escaping (Result<[AnyHashable: Any], Error>) -> Void) {
+    @preconcurrency
+    func refreshCustomData(_ completion: @escaping @Sendable (Result<[AnyHashable: Any], Error>) -> Void) {
         self.refreshCustomData { customData, error in
             if let customData = customData {
                 completion(.success(customData))
@@ -845,23 +1124,7 @@ public extension User {
     }
 }
 
-#if swift(>=5.6) && canImport(_Concurrency)
-@available(macOS 10.15, tvOS 13.0, iOS 13.0, watchOS 6.0, *)
-public extension User {
-    /// Links the currently authenticated user with a new identity, where the identity is defined by the credential
-    /// specified as a parameter. This will only be successful if this `User` is the currently authenticated
-    /// with the client from which it was created. On success a new user will be returned with the new linked credentials.
-    /// - Parameters:
-    ///   - credentials: The `Credentials` used to link the user to a new identity.
-    /// - Returns:A `User` after successfully update its identity.
-    func linkUser(credentials: Credentials) async throws -> User {
-        return try await withCheckedThrowingContinuation { continuation in
-            linkUser(credentials: credentials, continuation.resume)
-        }
-    }
-}
-
-@available(macOS 10.15, tvOS 13.0, iOS 13.0, watchOS 6.0, *)
+@available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 6.0, *)
 extension FunctionCallable {
     /// The implementation of @dynamicMemberLookup that allows  for `async await` callable return.
     ///
@@ -870,19 +1133,14 @@ extension FunctionCallable {
     ///     }
     ///
     public func dynamicallyCall(withArguments args: [[AnyBSON]]) async throws -> AnyBSON {
-        try await withCheckedThrowingContinuation { continuation in
-            let objcArgs = args.first!.map(ObjectiveCSupport.convertBson)
-            self.user.__callFunctionNamed(name, arguments: objcArgs) { (bson: RLMBSON?, error: Error?) in
-                if let b = bson.map(ObjectiveCSupport.convertBson), let bson = b {
-                    continuation.resume(returning: bson)
-                } else {
-                    continuation.resume(throwing: error ?? Realm.Error.callFailed)
-                }
-            }
+        let objcArgs = args.first!.map(ObjectiveCSupport.convertBson)
+        let ret = try await user.__callFunctionNamed(name, arguments: objcArgs)
+        if let bson = ObjectiveCSupport.convertBson(object: ret) {
+            return bson
         }
+        throw Realm.Error.callFailed
     }
 }
-#endif // swift(>=5.6)
 
 extension User {
     /**
@@ -893,10 +1151,19 @@ extension User {
      a realm with a flexible sync configuration, you won't be able to open a realm with a PBS configuration
      and the other way around.
 
-     @return A `Realm.Configuration` instance with a flexible sync configuration.
+     - parameter clientResetMode: Determines file recovery behavior during a client reset. `.recoverUnsyncedChanges` by default.
+     - parameter cancelAsyncOpenOnNonFatalErrors: By default, Realm.asyncOpen()
+     swallows non-fatal connection errors such as a connection attempt timing
+     out and simply retries until it succeeds. If this is set to `true`, instead
+     the error will be reported to the callback and the async open will be
+     cancelled.
+
+     - returns A `Realm.Configuration` instance with a flexible sync configuration.
      */
-    public func flexibleSyncConfiguration() -> Realm.Configuration {
-        let config = self.__flexibleSyncConfiguration()
+    public func flexibleSyncConfiguration(clientResetMode: ClientResetMode = .recoverUnsyncedChanges(),
+                                          cancelAsyncOpenOnNonFatalErrors: Bool = false) -> Realm.Configuration {
+        let config = __flexibleSyncConfiguration()
+        setSyncFields(config, clientResetMode: clientResetMode, cancelAsyncOpenOnNonFatalErrors: cancelAsyncOpenOnNonFatalErrors)
         return ObjectiveCSupport.convert(object: config)
     }
 
@@ -917,17 +1184,29 @@ extension User {
      }, rerunOnOpen: true)
      ```
 
+     - parameter clientResetMode: Determines file recovery behavior during a client reset. `.recoverUnsyncedChanges` by default.
      - parameter initialSubscriptions: A block which receives a subscription set instance, that can be used to add an
                                        initial set of subscriptions which will be executed when the Realm is first opened.
      - parameter rerunOnOpen:          If true, allows to run the initial set of subscriptions specified, on every app startup.
                                        This can be used to re-run dynamic time ranges and other queries that require a
                                        re-computation of a static variable.
+     - parameter cancelAsyncOpenOnNonFatalErrors: By default, Realm.asyncOpen()
+     swallows non-fatal connection errors such as a connection attempt timing
+     out and simply retries until it succeeds. If this is set to `true`, instead
+     the error will be reported to the callback and the async open will be
+     cancelled.
 
 
-     @return A `Realm.Configuration` instance with a flexible sync configuration.
+     - returns A `Realm.Configuration` instance with a flexible sync configuration.
      */
-    public func flexibleSyncConfiguration(initialSubscriptions: @escaping ((SyncSubscriptionSet) -> Void), rerunOnOpen: Bool = false) -> Realm.Configuration {
-        let config = self.__flexibleSyncConfiguration(initialSubscriptions: ObjectiveCSupport.convert(block: initialSubscriptions), rerunOnOpen: rerunOnOpen)
+    @preconcurrency
+    public func flexibleSyncConfiguration(clientResetMode: ClientResetMode = .recoverUnsyncedChanges(),
+                                          cancelAsyncOpenOnNonFatalErrors: Bool = false,
+                                          initialSubscriptions: @escaping @Sendable (SyncSubscriptionSet) -> Void,
+                                          rerunOnOpen: Bool = false) -> Realm.Configuration {
+        let config = __flexibleSyncConfiguration(initialSubscriptions: ObjectiveCSupport.convert(block: initialSubscriptions),
+                                                 rerunOnOpen: rerunOnOpen)
+        setSyncFields(config, clientResetMode: clientResetMode, cancelAsyncOpenOnNonFatalErrors: cancelAsyncOpenOnNonFatalErrors)
         return ObjectiveCSupport.convert(object: config)
     }
 }

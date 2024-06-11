@@ -238,13 +238,14 @@ extension Persisted: Decodable where Value: Decodable {
 
 extension Persisted: Encodable where Value: Encodable {
     public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
         switch storage {
         case .unmanaged(let value, _, _):
-            try value.encode(to: encoder)
+            try container.encode(value)
         case .unmanagedObserved(let value, _):
-            try value.encode(to: encoder)
+            try container.encode(value)
         case .unmanagedNoDefault:
-            try Value._rlmDefaultValue().encode(to: encoder)
+            try container.encode(Value._rlmDefaultValue())
         default:
             // We need a reference to the parent object to be able to read from
             // a managed property. There's probably a way to do this with some
@@ -347,9 +348,9 @@ extension Persisted where Value.PersistedType: _PrimaryKey {
     }
 }
 
-/// :nodoc:
 // Constraining the LinkingObjects initializer to only LinkingObjects require
 // doing so via a protocol which only that type conforms to.
+/// :nodoc:
 public protocol LinkingObjectsProtocol {
     init(fromType: Element.Type, property: String)
     associatedtype Element

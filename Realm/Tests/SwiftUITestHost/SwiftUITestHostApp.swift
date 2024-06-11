@@ -28,9 +28,11 @@ struct ReminderFormView: View {
             DatePicker("date", selection: $reminder.date)
             Picker("priority", selection: $reminder.priority, content: {
                 ForEach(Reminder.Priority.allCases) { priority in
-                    Text(priority.description).tag(priority)
+                    Text(priority.description)
+                        .tag(priority)
+                        .accessibilityIdentifier(priority.description)
                 }
-            }).accessibilityIdentifier("picker")
+            }).accessibilityIdentifier("priority_picker")
         }
         .navigationTitle(reminder.title)
     }
@@ -161,19 +163,30 @@ struct Footer: View {
     }
 }
 
+@MainActor
 struct ContentView: View {
     @State var searchFilter: String = ""
 
+    var content: some View {
+        VStack {
+            SearchView(searchFilter: $searchFilter)
+            ReminderListResultsView(searchFilter: $searchFilter)
+            Spacer()
+            Footer()
+        }
+        .navigationBarItems(trailing: EditButton())
+        .navigationTitle("reminders")
+    }
+
     var body: some View {
-        NavigationView {
-            VStack {
-                SearchView(searchFilter: $searchFilter)
-                ReminderListResultsView(searchFilter: $searchFilter)
-                Spacer()
-                Footer()
+        if #available(iOS 16.0, *) {
+            NavigationStack {
+                content
             }
-            .navigationBarItems(trailing: EditButton())
-            .navigationTitle("reminders")
+        } else {
+            NavigationView {
+                content
+            }
         }
     }
 }
@@ -222,12 +235,14 @@ struct UnmanagedObjectTestView: View {
         @Environment(\.presentationMode) var presentationMode
         @State var shown = false
         var body: some View {
-            NavigationLink("Next", destination: NestedViewTwo(reminderList: reminderList)).onAppear {
-                if shown {
-                    presentationMode.wrappedValue.dismiss()
+            NavigationLink("Next", destination: NestedViewTwo(reminderList: reminderList))
+                .isDetailLink(false)
+                .onAppear {
+                    if shown {
+                        presentationMode.wrappedValue.dismiss()
+                    }
+                    shown = true
                 }
-                shown = true
-            }
         }
     }
     @ObservedRealmObject var reminderList = ReminderList()
@@ -239,6 +254,7 @@ struct UnmanagedObjectTestView: View {
             Form {
                 TextField("name", text: $reminderList.name).accessibilityIdentifier("name")
                 NavigationLink("test", destination: NestedViewOne(reminderList: reminderList), isActive: $passToNestedView)
+                    .isDetailLink(false)
             }.navigationBarItems(trailing: Button("Add", action: {
                 try! realm.write { realm.add(reminderList) }
                 passToNestedView = true

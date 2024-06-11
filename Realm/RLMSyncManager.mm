@@ -32,12 +32,14 @@
 #import "RLMVersion.h"
 #endif
 
+#include <os/lock.h>
+
 using namespace realm;
 
+// NEXT-MAJOR: All the code associated to the logger from sync manager should be removed.
 using Level = realm::util::Logger::Level;
 
 namespace {
-
 Level levelForSyncLogLevel(RLMSyncLogLevel logLevel) {
     switch (logLevel) {
         case RLMSyncLogLevelOff:    return Level::off;
@@ -70,8 +72,8 @@ RLMSyncLogLevel logLevelForLevel(Level logLevel) {
 
 #pragma mark - Loggers
 
-struct CocoaSyncLogger : public realm::util::RootLogger {
-    void do_log(Level, const std::string& message) override {
+struct CocoaSyncLogger : public realm::util::Logger {
+    void do_log(const realm::util::LogCategory&, Level, const std::string& message) override {
         NSLog(@"Sync: %@", RLMStringDataToNSString(message));
     }
 };
@@ -82,9 +84,9 @@ static std::unique_ptr<realm::util::Logger> defaultSyncLogger(realm::util::Logge
     return std::move(logger);
 }
 
-struct CallbackLogger : public realm::util::RootLogger {
+struct CallbackLogger : public realm::util::Logger {
     RLMSyncLogFunction logFn;
-    void do_log(Level level, const std::string& message) override {
+    void do_log(const realm::util::LogCategory&, Level level, const std::string& message) override {
         @autoreleasepool {
             logFn(logLevelForLevel(level), RLMStringDataToNSString(message));
         }
@@ -102,79 +104,53 @@ std::shared_ptr<realm::util::Logger> RLMWrapLogFunction(RLMSyncLogFunction fn) {
 
 #pragma mark - RLMSyncManager
 
-@interface RLMSyncTimeoutOptions () {
-    @public
-    realm::SyncClientTimeouts _options;
-}
-@end
-
 @implementation RLMSyncManager {
+    RLMUnfairMutex _mutex;
     std::shared_ptr<SyncManager> _syncManager;
+    NSDictionary<NSString *,NSString *> *_customRequestHeaders;
+    RLMSyncLogFunction _logger;
 }
 
 - (instancetype)initWithSyncManager:(std::shared_ptr<realm::SyncManager>)syncManager {
     if (self = [super init]) {
-        [RLMUser _setUpBindingContextFactory];
         _syncManager = syncManager;
         return self;
     }
     return nil;
 }
 
-+ (SyncClientConfig)configurationWithRootDirectory:(NSURL *)rootDirectory appId:(NSString *)appId {
-    SyncClientConfig config;
-    bool should_encrypt = !getenv("REALM_DISABLE_METADATA_ENCRYPTION") && !RLMIsRunningInPlayground();
-    config.logger_factory = defaultSyncLogger;
-    config.metadata_mode = should_encrypt ? SyncManager::MetadataMode::Encryption
-                                          : SyncManager::MetadataMode::NoEncryption;
-    @autoreleasepool {
-        rootDirectory = rootDirectory ?: [NSURL fileURLWithPath:RLMDefaultDirectoryForBundleIdentifier(nil)];
-        config.base_file_path = rootDirectory.path.UTF8String;
-
-        bool isSwift = !!NSClassFromString(@"RealmSwiftObjectUtil");
-        config.user_agent_binding_info =
-            util::format("Realm%1/%2", isSwift ? "Swift" : "ObjectiveC",
-                         RLMStringDataWithNSString(REALM_COCOA_VERSION));
-        config.user_agent_application_info = RLMStringDataWithNSString(appId);
-    }
-
-    return config;
-}
-
-- (std::weak_ptr<realm::app::App>)app {
-    return _syncManager->app();
-}
-
-- (NSString *)appID {
-    if (!_appID) {
-        _appID = [[NSBundle mainBundle] bundleIdentifier] ?: @"(none)";
-    }
-    return _appID;
-}
-
-- (void)setUserAgent:(NSString *)userAgent {
-    _syncManager->set_user_agent(RLMStringDataWithNSString(userAgent));
-    _userAgent = userAgent;
+- (NSDictionary<NSString *,NSString *> *)customRequestHeaders {
+    std::lock_guard lock(_mutex);
+    return _customRequestHeaders;
 }
 
 - (void)setCustomRequestHeaders:(NSDictionary<NSString *,NSString *> *)customRequestHeaders {
-    _customRequestHeaders = customRequestHeaders.copy;
+    {
+        std::lock_guard lock(_mutex);
+        _customRequestHeaders = customRequestHeaders.copy;
+    }
 
-    for (auto&& user : _syncManager->all_users()) {
-        for (auto&& session : user->all_sessions()) {
-            auto config = session->config();
-            config.custom_http_headers.clear();
-            for (NSString *key in customRequestHeaders) {
-                config.custom_http_headers.emplace(key.UTF8String, customRequestHeaders[key].UTF8String);
-            }
-            session->update_configuration(std::move(config));
+    for (auto&& session : _syncManager->get_all_sessions()) {
+        auto config = session->config();
+        config.custom_http_headers.clear();
+        for (NSString *key in customRequestHeaders) {
+            config.custom_http_headers.emplace(key.UTF8String, customRequestHeaders[key].UTF8String);
         }
+        session->update_configuration(std::move(config));
     }
 }
 
+- (RLMSyncLogFunction)logger {
+    std::lock_guard lock(_mutex);
+    return _logger;
+}
+
 - (void)setLogger:(RLMSyncLogFunction)logFn {
-    _logger = logFn;
-    if (_logger) {
+    {
+        std::lock_guard lock(_mutex);
+        _logger = logFn;
+    }
+    if (logFn) {
         _syncManager->set_logger_factory([logFn](realm::util::Logger::Level level) {
             auto logger = std::make_unique<CallbackLogger>();
             logger->logFn = logFn;
@@ -187,12 +163,23 @@ std::shared_ptr<realm::util::Logger> RLMWrapLogFunction(RLMSyncLogFunction fn) {
     }
 }
 
-- (void)setTimeoutOptions:(RLMSyncTimeoutOptions *)timeoutOptions {
-    _timeoutOptions = timeoutOptions;
-    _syncManager->set_timeouts(timeoutOptions->_options);
+#pragma mark - Passthrough properties
+
+- (NSString *)userAgent {
+    return @(_syncManager->config().user_agent_application_info.c_str());
 }
 
-#pragma mark - Passthrough properties
+- (void)setUserAgent:(NSString *)userAgent {
+    _syncManager->set_user_agent(RLMStringDataWithNSString(userAgent));
+}
+
+- (RLMSyncTimeoutOptions *)timeoutOptions {
+    return [[RLMSyncTimeoutOptions alloc] initWithOptions:_syncManager->config().timeouts];
+}
+
+- (void)setTimeoutOptions:(RLMSyncTimeoutOptions *)timeoutOptions {
+    _syncManager->set_timeouts(timeoutOptions->_options);
+}
 
 - (RLMSyncLogLevel)logLevel {
     return logLevelForLevel(_syncManager->log_level());
@@ -204,37 +191,46 @@ std::shared_ptr<realm::util::Logger> RLMWrapLogFunction(RLMSyncLogFunction fn) {
 
 #pragma mark - Private API
 
-- (void)_fireError:(NSError *)error {
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.errorHandler) {
-            self.errorHandler(error, nil);
-        }
-    });
-}
-
 - (void)resetForTesting {
     _errorHandler = nil;
-    _appID = nil;
-    _userAgent = nil;
     _logger = nil;
-    _authorizationHeaderName = nil;
-    _customRequestHeaders = nil;
-    _timeoutOptions = nil;
-    _syncManager->reset_for_testing();
+    _syncManager->tear_down_for_testing();
 }
 
-- (std::shared_ptr<realm::SyncManager>)syncManager {
+- (std::shared_ptr<realm::SyncManager> const&)syncManager {
     return _syncManager;
 }
 
 - (void)waitForSessionTermination {
     _syncManager->wait_for_sessions_to_terminate();
 }
+
+- (void)populateConfig:(realm::SyncConfig&)config {
+    @synchronized (self) {
+        if (_authorizationHeaderName) {
+            config.authorization_header_name.emplace(_authorizationHeaderName.UTF8String);
+        }
+        [_customRequestHeaders enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSString *header, BOOL *) {
+            config.custom_http_headers.emplace(key.UTF8String, header.UTF8String);
+        }];
+    }
+}
+
+- (bool)hasAnySessions {
+    return _syncManager->get_all_sessions().size() > 0;
+}
 @end
 
 #pragma mark - RLMSyncTimeoutOptions
 
 @implementation RLMSyncTimeoutOptions
+- (instancetype)initWithOptions:(realm::SyncClientTimeouts)options {
+    if (self = [super init]) {
+        _options = options;
+    }
+    return self;
+}
+
 - (NSUInteger)connectTimeout {
     return static_cast<NSUInteger>(_options.connect_timeout);
 }

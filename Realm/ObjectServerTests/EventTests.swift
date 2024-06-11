@@ -16,12 +16,14 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 
+import Combine
 import Foundation
 import RealmSwift
 import XCTest
 
 #if canImport(RealmTestSupport)
 import RealmSwiftSyncTestSupport
+import RealmSwiftTestSupport
 import RealmSyncTestSupport
 import RealmTestSupport
 #endif
@@ -58,16 +60,15 @@ class AuditEvent: Object {
     var parsedData: NSDictionary?
 }
 
+@available(macOS 13, *)
 class SwiftEventTests: SwiftSyncTestCase {
     var user: User!
     var collection: MongoCollection!
     var start: Date!
 
     override func setUp() {
-        user = try! logInUser(for: basicCredentials())
-        let mongoClient = user.mongoClient("mongodb1")
-        let database = mongoClient.database(named: "test_data")
-        collection = database.collection(withName: "AuditEvent")
+        user = createUser()
+        collection = user.collection(for: AuditEvent.self, app: app)
         _ = collection.deleteManyDocuments(filter: [:]).await(self)
 
         // The server truncates date values to lower precision than we support,
@@ -76,7 +77,7 @@ class SwiftEventTests: SwiftSyncTestCase {
     }
 
     override func tearDown() {
-        if let user = self.user {
+        if let user {
             while user.allSessions.count > 0 {
                 RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.1))
             }
@@ -85,25 +86,28 @@ class SwiftEventTests: SwiftSyncTestCase {
         super.tearDown()
     }
 
-    func config(partition: String = #function) throws -> Realm.Configuration {
-        var config = user.configuration(partitionValue: partition)
+    override func configuration(user: User) -> Realm.Configuration {
+        var config = user.configuration(partitionValue: name)
         config.eventConfiguration = EventConfiguration()
-        config.objectTypes = [SwiftPerson.self, SwiftCustomEventRepresentation.self]
         return config
     }
 
+    override var objectTypes: [ObjectBase.Type] {
+        [AuditEvent.self, SwiftPerson.self, SwiftCustomEventRepresentation.self, LinkToSwiftPerson.self]
+    }
+
     func scope<T>(_ events: Events, _ name: String, body: () throws -> T) rethrows -> T {
-        events.beginScope(activity: name)
+        let scope = events.beginScope(activity: name)
+        XCTAssertTrue(scope.isActive)
         let result = try body()
-        events.endScope().await(self)
+        scope.commit().await(self)
+        XCTAssertFalse(scope.isActive)
         return result
     }
 
     func getEvents(expectedCount: Int) -> [AuditEvent] {
-        let waitStart = Date()
-        while collection.count(filter: [:]).await(self) < expectedCount && waitStart.timeIntervalSinceNow > -600.0 {
-            sleep(5)
-        }
+        waitForCollectionCount(collection, expectedCount)
+
         let docs = collection.find(filter: [:]).await(self)
         XCTAssertEqual(docs.count, expectedCount)
         return docs.map { doc in
@@ -163,7 +167,7 @@ class SwiftEventTests: SwiftSyncTestCase {
     }
 
     func testBasicEvents() throws {
-        let realm = try openRealm(configuration: self.config())
+        let realm = try openRealm()
         let events = realm.events!
 
         let personJson: NSDictionary = try scope(events, "create object") {
@@ -205,22 +209,39 @@ class SwiftEventTests: SwiftSyncTestCase {
                     ["SwiftPerson": ["deletions": [mutatedPersonJson]]])
     }
 
+    func testBasicWithAsyncOpen() throws {
+        let realm = Realm.asyncOpen(configuration: try configuration()).await(self)
+        let events = try XCTUnwrap(realm.events)
+
+        let personJson: NSDictionary = try scope(events, "create object") {
+            try realm.write {
+                let person = SwiftPerson(firstName: "Fred", lastName: "Q", age: 30)
+                realm.add(person)
+                return full(person)
+            }
+        }
+
+        let result = getEvents(expectedCount: 1)
+        assertEvent(result, activity: "create object", event: "write",
+                    ["SwiftPerson": ["insertions": [personJson]]])
+    }
+
     func testCustomEventRepresentation() throws {
-        let realm = try openRealm(configuration: self.config())
+        let realm = try openRealm()
         let events = realm.events!
-        events.beginScope(activity: "bad json")
+        let scope1 = events.beginScope(activity: "bad json")
         try realm.write {
             realm.add(SwiftCustomEventRepresentation(value: 0))
         }
-        events.endScope().awaitFailure(self) { error in
+        scope1.commit().awaitFailure(self) { error in
             XCTAssert(error.localizedDescription.contains("json.exception.parse_error"))
         }
 
-        events.beginScope(activity: "exception thrown")
+        let scope2 = events.beginScope(activity: "exception thrown")
         try realm.write {
             realm.add(SwiftCustomEventRepresentation(value: 1))
         }
-        events.endScope().awaitFailure(self) { error in
+        scope2.commit().awaitFailure(self) { error in
             XCTAssertEqual((error as NSError).userInfo["ExceptionName"] as! String?,
                            NSExceptionName.rangeException.rawValue)
         }
@@ -237,9 +258,7 @@ class SwiftEventTests: SwiftSyncTestCase {
     }
 
     func testReadEvents() throws {
-        var config = try self.config()
-        config.objectTypes = [SwiftPerson.self, LinkToSwiftPerson.self]
-        let realm = try openRealm(configuration: config)
+        let realm = try openRealm()
         let events = realm.events!
 
         let a = SwiftPerson(firstName: "A", lastName: "B")
@@ -251,7 +270,7 @@ class SwiftEventTests: SwiftSyncTestCase {
                 "person": a,
                 "people": [b, c],
                 "peopleByName": [b.firstName: b, c.firstName: c]
-            ])
+            ] as [String: Any])
         }
 
         let objects = realm.objects(SwiftPerson.self)
@@ -309,9 +328,7 @@ class SwiftEventTests: SwiftSyncTestCase {
     }
 
     func testLinkTracking() throws {
-        var config = try self.config()
-        config.objectTypes = [SwiftPerson.self, LinkToSwiftPerson.self]
-        let realm = try openRealm(configuration: config)
+        let realm = try openRealm()
         let events = realm.events!
 
         let a = SwiftPerson(firstName: "A", lastName: "B")
@@ -324,7 +341,7 @@ class SwiftEventTests: SwiftSyncTestCase {
                 "person": a,
                 "people": [b, c],
                 "peopleByName": [b.firstName: b, c.firstName: c]
-            ])._id
+            ] as [String: Any])._id
         }
 
         let objects = realm.objects(LinkToSwiftPerson.self)
@@ -393,29 +410,29 @@ class SwiftEventTests: SwiftSyncTestCase {
         assertEvent("link via subscript", personCount: 1, linkAccessed)
         assertEvent("link via dynamic", personCount: 1, linkAccessed)
 
-        let listAccsssed: NSDictionary = [
+        let listAccessed: NSDictionary = [
             "_id": id!.stringValue,
             "realm_id": NSNull(),
             "person": idOnly(a),
             "people": [full(b), full(c)],
             "peopleByName": [b.firstName: idOnly(b), c.firstName: idOnly(c)]
         ]
-        assertEvent("list property", personCount: 1, listAccsssed)
-        assertEvent("dynamic list property", personCount: 1, listAccsssed)
+        assertEvent("list property", personCount: 1, listAccessed)
+        assertEvent("dynamic list property", personCount: 1, listAccessed)
 
-        let dictionaryAccsssed: NSDictionary = [
+        let dictionaryAccessed: NSDictionary = [
             "_id": id!.stringValue,
             "realm_id": NSNull(),
             "person": idOnly(a),
             "people": [idOnly(b), idOnly(c)],
             "peopleByName": [b.firstName: full(b), c.firstName: full(c)]
         ]
-        assertEvent("dictionary property", personCount: 1, dictionaryAccsssed)
-        assertEvent("dynamic dictionary property", personCount: 1, dictionaryAccsssed)
+        assertEvent("dictionary property", personCount: 1, dictionaryAccessed)
+        assertEvent("dynamic dictionary property", personCount: 1, dictionaryAccessed)
     }
 
     func testMetadata() throws {
-        let realm = try Realm(configuration: self.config())
+        let realm = try openRealm()
         let events = realm.events!
 
         func writeEvent(_ name: String) throws {
@@ -444,7 +461,7 @@ class SwiftEventTests: SwiftSyncTestCase {
     func testCustomLogger() throws {
         let ex = expectation(description: "saw message with scope name")
         ex.assertForOverFulfill = false
-        var config = try self.config()
+        var config = try configuration()
         config.eventConfiguration!.logger = { _, message in
             // Mostly just verify that the user-provided logger is wired up
             // correctly and not that the log messages are sensible
@@ -453,13 +470,13 @@ class SwiftEventTests: SwiftSyncTestCase {
             }
         }
         let realm = try Realm(configuration: config)
-        realm.events!.beginScope(activity: "a scope name")
-        realm.events!.endScope().await(self)
+        let scope = realm.events!.beginScope(activity: "a scope name")
+        scope.commit().await(self)
         waitForExpectations(timeout: 2.0)
     }
 
     func testCustomEvent() throws {
-        let realm = try Realm(configuration: self.config())
+        let realm = try openRealm()
         let events = realm.events!
 
         events.recordEvent(activity: "no event or data")
@@ -475,5 +492,67 @@ class SwiftEventTests: SwiftSyncTestCase {
         assertEvent(result, activity: "json data", event: nil, ["foo": "bar"])
         assertEvent(result, activity: "non-json data", event: nil, data: "not valid json")
         assertEvent(result, activity: "event and data", event: "custom json event", ["bar": "foo"])
+    }
+
+    func testScopeLifetimes() throws {
+        let realm = try openRealm()
+        let events = realm.events!
+
+        try autoreleasepool { () -> Future<Void, Error> in
+            let scope1 = events.beginScope(activity: "scope 1")
+            let scope2 = events.beginScope(activity: "scope 2")
+            let scope3 = events.beginScope(activity: "scope 3")
+
+            try realm.write {
+                realm.add(SwiftPerson())
+            }
+
+            scope1.cancel()
+            XCTAssertTrue(scope2.isActive) // ensure scope stays alive to here
+            return scope3.commit()
+        }.await(self)
+
+        let result = getEvents(expectedCount: 1)
+        XCTAssertEqual(result[0].activity, "scope 3")
+    }
+
+    func testScopeCanOutliveSourceRealm() throws {
+        var scope: Events.Scope?
+        try autoreleasepool {
+            let realm = try openRealm()
+            let events = realm.events!
+            scope = events.beginScope(activity: "scope")
+            try realm.write {
+                realm.add(SwiftPerson())
+            }
+        }
+
+        scope?.commit().await(self)
+
+        let result = getEvents(expectedCount: 1)
+        XCTAssertEqual(result[0].activity, "scope")
+    }
+
+    func testErrorHandler() throws {
+        var config = try configuration()
+        let blockCalled = Locked(false)
+        let ex = expectation(description: "Error callback called")
+        var eventConfiguration = config.eventConfiguration!
+        eventConfiguration.errorHandler = { error in
+            assertSyncError(error, .clientInternalError,
+                            "Invalid schema change (UPLOAD): non-breaking schema change: adding \"String\" column at field \"invalid metadata field\" in schema \"AuditEvent\", schema changes from clients are restricted when developer mode is disabled")
+            blockCalled.value = true
+            ex.fulfill()
+        }
+        eventConfiguration.metadata = ["invalid metadata field": "value"]
+        config.eventConfiguration = eventConfiguration
+        let realm = try openRealm(configuration: config)
+        let events = realm.events!
+
+        // Recording the audit event should succeed, but we should get a sync
+        // error when trying to actually upload it due to the user having
+        // an invalid access token
+        events.recordEvent(activity: "activity which should fail").await(self)
+        wait(for: [ex], timeout: 4.0)
     }
 }
